@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { LayoutMode, NodeColorKey, OutlineNode, ThemeMode } from '../types/mindmap';
+import { LayoutMode, OutlineNode, ThemeMode } from '../types/mindmap';
 import {
   COLOR_PALETTES,
   MindMapLayoutResult,
@@ -23,7 +23,10 @@ import {
   ChevronLeft,
   ChevronDown,
   ChevronUp,
-  CornerDownRight
+  CornerDownRight,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 
 interface MindMapCanvasProps {
@@ -34,8 +37,15 @@ interface MindMapCanvasProps {
   activeLineIndex: number;
   selectedNodeId: string | null;
   inlineEditLineIndex: number | null;
+  inlineEditSeq: number;
+  centerNodeRequest?: { nodeId: string; seq: number } | null;
   onSelectNode: (node: OutlineNode | null) => void;
   onStartInlineEdit: (lineIndex: number | null) => void;
+  onCommitInlineEdit: (
+    node: OutlineNode,
+    draftText: string,
+    mode?: 'commit' | 'cancel' | 'addChild' | 'addSibling'
+  ) => void;
   onUpdateNode: (node: OutlineNode, patch: Partial<ParsedLineAttrs>) => void;
   onAddChild: (node: OutlineNode) => void;
   onAddSibling: (node: OutlineNode) => void;
@@ -57,8 +67,11 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   activeLineIndex,
   selectedNodeId,
   inlineEditLineIndex,
+  inlineEditSeq,
+  centerNodeRequest,
   onSelectNode,
   onStartInlineEdit,
+  onCommitInlineEdit,
   onUpdateNode,
   onAddChild,
   onAddSibling,
@@ -70,6 +83,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const smoothTimerRef = useRef<number | null>(null);
 
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 80, y: 240 });
   const [zoom, setZoom] = useState<number>(0.95);
@@ -78,16 +92,22 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   const panStartRef = useRef({ clientX: 0, clientY: 0, panX: 0, panY: 0 });
   const didPanMoveRef = useRef(false);
 
-  // Inline Editing Draft Text
+  // Inline Editing Draft Text & Guards
   const [inlineDraft, setInlineDraft] = useState<string>('');
+  const committedEditRef = useRef<boolean>(false);
+  const initializedEditSeqRef = useRef<number>(0);
 
-  // Search Bar
+  // Top-Left Search & iPad PencilKit-style Node Tool Capsule
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [toolPillOpen, setToolPillOpen] = useState<boolean>(false);
+  const [colorPopoverOpen, setColorPopoverOpen] = useState<boolean>(false);
 
-  // Focus Node Mode
+  // Focus Node Mode & Center-on-New-Node Request
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
   const pendingFocusIdRef = useRef<string | null>(null);
+  const pendingCenterNodeIdRef = useRef<string | null>(null);
+  const lastCenteredSeqRef = useRef<number>(0);
 
   // Drag-and-Drop Node Reparenting State
   const [draggingNode, setDraggingNode] = useState<OutlineNode | null>(null);
@@ -97,6 +117,32 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   } | null>(null);
 
   const isDark = theme === 'dark';
+
+  const triggerSmoothAnim = useCallback((durationMs: number = 320) => {
+    if (smoothTimerRef.current !== null) {
+      window.clearTimeout(smoothTimerRef.current);
+    }
+    setSmoothAnim(true);
+    smoothTimerRef.current = window.setTimeout(() => {
+      setSmoothAnim(false);
+      smoothTimerRef.current = null;
+    }, durationMs);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (smoothTimerRef.current !== null) {
+        window.clearTimeout(smoothTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Close color popover if selection is cleared
+  useEffect(() => {
+    if (!selectedNodeId) {
+      setColorPopoverOpen(false);
+    }
+  }, [selectedNodeId]);
 
   // Fit entire mindmap into viewport
   const fitToView = useCallback(
@@ -116,8 +162,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       const cy = (layout.bounds.minY + layout.bounds.maxY) / 2;
 
       if (animate) {
-        setSmoothAnim(true);
-        window.setTimeout(() => setSmoothAnim(false), 320);
+        triggerSmoothAnim(320);
       }
       setZoom(nextZoom);
       setPan({
@@ -126,7 +171,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       });
       setFocusedNodeId(null);
     },
-    [layout.bounds]
+    [layout.bounds, triggerSmoothAnim]
   );
 
   // Initial fit & refit when layoutMode changes
@@ -135,18 +180,59 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     return () => clearTimeout(t);
   }, [layoutMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Populate inline input when inlineEditLineIndex becomes active
+  // Populate inline input when inlineEditLineIndex / inlineEditSeq becomes active
   useEffect(() => {
-    if (inlineEditLineIndex === null) return;
-    const target = layout.nodes.find((p) => p.node.lineIndex === inlineEditLineIndex);
-    if (target) {
-      setInlineDraft(target.node.text);
-      window.requestAnimationFrame(() => {
-        inlineInputRef.current?.focus();
-        inlineInputRef.current?.select();
-      });
+    if (inlineEditLineIndex === null) {
+      initializedEditSeqRef.current = 0;
+      return;
     }
-  }, [inlineEditLineIndex, layout.nodes]);
+    if (initializedEditSeqRef.current === inlineEditSeq) return;
+    const target = layout.nodes.find((p) => p.node.lineIndex === inlineEditLineIndex);
+    if (!target) return;
+
+    initializedEditSeqRef.current = inlineEditSeq;
+    committedEditRef.current = false;
+    setInlineDraft(target.node.text);
+    window.requestAnimationFrame(() => {
+      const inputEl = inlineInputRef.current;
+      if (!inputEl) return;
+      inputEl.focus({ preventScroll: true });
+      if (target.node.text.length > 0) {
+        inputEl.select();
+      }
+    });
+  }, [inlineEditLineIndex, inlineEditSeq, layout.nodes]);
+
+  // Smoothly pan viewport to center newly created node (Tab / Enter)
+  useEffect(() => {
+    if (!centerNodeRequest || centerNodeRequest.seq === lastCenteredSeqRef.current) return;
+    lastCenteredSeqRef.current = centerNodeRequest.seq;
+    pendingCenterNodeIdRef.current = centerNodeRequest.nodeId;
+  }, [centerNodeRequest]);
+
+  useEffect(() => {
+    const cid = pendingCenterNodeIdRef.current;
+    if (!cid) return;
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const targetPos = layout.nodes.find((p) => p.node.id === cid);
+    if (!targetPos) return;
+
+    pendingCenterNodeIdRef.current = null;
+    const vw = vp.clientWidth || 700;
+    const vh = vp.clientHeight || 500;
+    const nextZoom = zoom < 0.72 ? 0.85 : zoom;
+
+    triggerSmoothAnim(300);
+    if (nextZoom !== zoom) {
+      setZoom(nextZoom);
+    }
+    setPan({
+      x: vw / 2 - targetPos.centerX * nextZoom,
+      y: vh / 2 - targetPos.centerY * nextZoom
+    });
+  }, [centerNodeRequest, layout, zoom, triggerSmoothAnim]);
 
   // Execute focus zoom after node expansion finishes layout
   useEffect(() => {
@@ -185,14 +271,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
 
-    setSmoothAnim(true);
-    window.setTimeout(() => setSmoothAnim(false), 350);
+    triggerSmoothAnim(350);
     setZoom(nextZoom);
     setPan({
       x: vw / 2 - cx * nextZoom,
       y: vh / 2 - cy * nextZoom
     });
-  }, [layout]);
+  }, [layout, triggerSmoothAnim]);
 
   const handleFocusNode = (node: OutlineNode) => {
     setFocusedNodeId(node.id);
@@ -225,8 +310,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
         1.45,
         Math.max(0.85, Math.min(vw / (maxX - minX + 140), vh / (maxY - minY + 140)))
       );
-      setSmoothAnim(true);
-      window.setTimeout(() => setSmoothAnim(false), 350);
+      triggerSmoothAnim(350);
       setZoom(nextZoom);
       setPan({
         x: vw / 2 - ((minX + maxX) / 2) * nextZoom,
@@ -333,12 +417,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     };
   }, [isPanning]);
 
-  const commitInlineEdit = (node: OutlineNode) => {
-    const trimmed = inlineDraft.trim();
-    if (trimmed && trimmed !== node.text) {
-      onUpdateNode(node, { text: trimmed });
-    }
-    onStartInlineEdit(null);
+  const finishInlineEdit = (
+    node: OutlineNode,
+    mode: 'commit' | 'cancel' | 'addChild' | 'addSibling' = 'commit'
+  ) => {
+    if (committedEditRef.current) return;
+    committedEditRef.current = true;
+    onCommitInlineEdit(node, inlineDraft, mode);
   };
 
   const handleZoomStep = (factor: number) => {
@@ -348,14 +433,22 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     const nextZoom = Math.min(2.5, Math.max(0.22, zoom * factor));
     const wx = (cx - pan.x) / zoom;
     const wy = (cy - pan.y) / zoom;
-    setSmoothAnim(true);
-    window.setTimeout(() => setSmoothAnim(false), 240);
+    triggerSmoothAnim(240);
     setZoom(nextZoom);
     setPan({ x: cx - wx * nextZoom, y: cy - wy * nextZoom });
   };
 
   const selectedPositioned: PositionedMindNode | undefined = layout.nodes.find(
     (p) => p.node.id === selectedNodeId
+  );
+  const selectedPalette = selectedPositioned
+    ? resolveNodePalette(selectedPositioned.node)
+    : null;
+  const selectedHasMeta = Boolean(
+    selectedPositioned &&
+      (selectedPositioned.node.note ||
+        selectedPositioned.node.url ||
+        selectedPositioned.node.tags.length > 0)
   );
 
   return (
@@ -368,6 +461,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
           !didPanMoveRef.current &&
           !(e.target as HTMLElement).closest('[data-mind-node], button, input')
         ) {
+          setColorPopoverOpen(false);
           onSelectNode(null);
         }
       }}
@@ -381,62 +475,330 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
         backgroundSize: '24px 24px'
       }}
     >
-      {/* Top-Left Search Toggle */}
-      <div className="absolute top-3 left-3 z-30 flex items-center gap-2">
-        {searchOpen ? (
-          <div
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border shadow-lg backdrop-blur-md ${
-              isDark
-                ? 'bg-slate-900/95 border-cyan-500/40 text-white'
-                : 'bg-white/95 border-cyan-500/50 text-slate-800'
-            }`}
-          >
-            <Search className="w-3.5 h-3.5 text-cyan-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜尋節點文字或標籤..."
-              autoFocus
-              className="bg-transparent text-xs focus:outline-none w-44"
-            />
+      {/* Top-Left Search + iPad PencilKit-Style Node Action Capsule */}
+      <div className="absolute top-3 left-3 z-30 flex items-center gap-2.5 flex-wrap pointer-events-none">
+        {/* Search Pill */}
+        <div className="pointer-events-auto">
+          {searchOpen ? (
+            <div
+              className={`h-9 flex items-center gap-2 px-3.5 rounded-full border shadow-lg backdrop-blur-xl animate-fade-in ${
+                isDark
+                  ? 'bg-slate-900/92 border-cyan-500/45 text-white shadow-black/40'
+                  : 'bg-white/92 border-cyan-500/50 text-slate-800 shadow-slate-300/60'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜尋節點文字或標籤..."
+                autoFocus
+                className="bg-transparent text-xs focus:outline-none w-40 sm:w-44"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchOpen(false);
+                }}
+                className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                  isDark
+                    ? 'text-slate-400 hover:bg-slate-800 hover:text-rose-400'
+                    : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500'
+                }`}
+                title="關閉搜尋"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setSearchOpen(false);
-              }}
-              className="text-xs text-slate-400 hover:text-rose-400"
+              onClick={() => setSearchOpen(true)}
+              className={`h-9 flex items-center gap-1.5 px-3.5 rounded-full border text-xs font-medium shadow-md backdrop-blur-xl transition-all hover:scale-[1.02] active:scale-95 ${
+                isDark
+                  ? 'bg-slate-900/88 hover:bg-slate-800/95 border-slate-700/80 text-slate-200 shadow-black/35'
+                  : 'bg-white/90 hover:bg-white border-slate-200/90 text-slate-700 shadow-slate-300/50'
+              }`}
+              title="搜尋地圖節點"
             >
-              關閉
+              <Search className="w-3.5 h-3.5 text-cyan-500" />
+              <span>搜尋節點</span>
             </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs shadow-sm backdrop-blur-md transition-colors ${
-              isDark
-                ? 'bg-slate-900/85 hover:bg-slate-800 border-slate-800 text-slate-300'
-                : 'bg-white/90 hover:bg-slate-100 border-slate-200 text-slate-700'
-            }`}
-            title="搜尋地圖節點"
+          )}
+        </div>
+
+        {/* Fixed iPad PencilKit-Style Node Quick Tool Capsule (next to Search) */}
+        {selectedPositioned && selectedPalette && (
+          <div
+            data-mind-node="toolbar"
+            onClick={(e) => e.stopPropagation()}
+            className="pointer-events-auto relative"
           >
-            <Search className="w-3.5 h-3.5 text-cyan-500" />
-            <span>搜尋節點</span>
-          </button>
+            {!toolPillOpen ? (
+              <button
+                type="button"
+                onClick={() => setToolPillOpen(true)}
+                className={`group relative w-9 h-9 rounded-full border shadow-lg backdrop-blur-xl flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 animate-fade-in ${
+                  isDark
+                    ? 'bg-slate-900/90 hover:bg-slate-800/95 border-slate-700/80 text-slate-100'
+                    : 'bg-white/92 hover:bg-white border-slate-200/90 text-slate-700'
+                }`}
+                style={{
+                  boxShadow: `0 0 0 2px ${selectedPalette.hex}55, 0 8px 20px -4px rgba(0, 0, 0, 0.28)`
+                }}
+                title="展開節點工具筆盒（換色、新增、待辦、聚焦、刪除）"
+              >
+                <Pencil className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full"
+                  style={{
+                    backgroundColor: selectedPalette.hex,
+                    boxShadow: isDark ? '0 0 0 2px #0f172a' : '0 0 0 2px #ffffff'
+                  }}
+                />
+              </button>
+            ) : (
+              <div
+                className={`relative h-9 px-1.5 rounded-full border shadow-xl backdrop-blur-xl flex items-center gap-0.5 animate-fade-in ${
+                  isDark
+                    ? 'bg-slate-900/92 border-slate-700/80 text-slate-200 shadow-black/45'
+                    : 'bg-white/94 border-slate-200/90 text-slate-700 shadow-slate-300/70'
+                }`}
+              >
+                {/* Minimize Back to Single Pencil Circle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToolPillOpen(false);
+                    setColorPopoverOpen(false);
+                  }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                    isDark
+                      ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30'
+                      : 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100'
+                  }`}
+                  title="收合為單一畫筆圖示"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+
+                <div
+                  className={`w-px h-4 mx-0.5 ${
+                    isDark ? 'bg-slate-700/70' : 'bg-slate-200'
+                  }`}
+                />
+
+                {/* Color Well Swatch (Merged 6+ Colors into 1 Circle) */}
+                <button
+                  type="button"
+                  onClick={() => setColorPopoverOpen((v) => !v)}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95 ${
+                    colorPopoverOpen ? (isDark ? 'bg-slate-800' : 'bg-slate-100') : ''
+                  }`}
+                  title="切換節點分支色彩"
+                >
+                  <span
+                    className="w-4 h-4 rounded-full ring-2 ring-white/90 shadow-sm"
+                    style={{ backgroundColor: selectedPalette.hex }}
+                  />
+                </button>
+
+                {/* Add Child Node (Tab) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorPopoverOpen(false);
+                    onAddChild(selectedPositioned.node);
+                  }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                    isDark
+                      ? 'text-cyan-400 hover:bg-cyan-500/20'
+                      : 'text-cyan-600 hover:bg-cyan-50'
+                  }`}
+                  title="新增子節點 (Tab)"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+
+                {/* Add Sibling Node (Enter) */}
+                {selectedPositioned.node.depth > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setColorPopoverOpen(false);
+                      onAddSibling(selectedPositioned.node);
+                    }}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                      isDark
+                        ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                    title="新增同級節點 (Enter)"
+                  >
+                    <CornerDownRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Toggle Todo Checkbox */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorPopoverOpen(false);
+                    const cur = selectedPositioned.node.checked;
+                    const next =
+                      cur === undefined ? false : cur === false ? true : undefined;
+                    onUpdateNode(selectedPositioned.node, { checked: next });
+                  }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                    selectedPositioned.node.checked !== undefined
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : isDark
+                      ? 'text-emerald-400/85 hover:bg-slate-800 hover:text-emerald-300'
+                      : 'text-emerald-600 hover:bg-slate-100'
+                  }`}
+                  title="切換待辦核取方塊"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Node Detail Modal */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorPopoverOpen(false);
+                    onOpenNodeDetail(selectedPositioned.node);
+                  }}
+                  className={`relative w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                    selectedHasMeta
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : isDark
+                      ? 'text-amber-400/85 hover:bg-slate-800 hover:text-amber-300'
+                      : 'text-amber-600 hover:bg-slate-100'
+                  }`}
+                  title="編輯節點詳細資訊（備註、連結、標籤）"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  {selectedHasMeta && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  )}
+                </button>
+
+                {/* Focus Branch */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorPopoverOpen(false);
+                    handleFocusNode(selectedPositioned.node);
+                  }}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                    focusedNodeId === selectedPositioned.node.id
+                      ? 'bg-indigo-500/25 text-indigo-300'
+                      : isDark
+                      ? 'text-indigo-400 hover:bg-slate-800 hover:text-indigo-300'
+                      : 'text-indigo-600 hover:bg-slate-100'
+                  }`}
+                  title="聚焦放大此分支"
+                >
+                  <Focus className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Delete Node & Subtree */}
+                {selectedPositioned.node.depth > 0 && (
+                  <>
+                    <div
+                      className={`w-px h-4 mx-0.5 ${
+                        isDark ? 'bg-slate-700/70' : 'bg-slate-200'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColorPopoverOpen(false);
+                        onDeleteNode(selectedPositioned.node);
+                      }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors"
+                      title="刪除此節點與子樹 (Delete)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+
+                {/* iPad Markup Style Floating Color Swatch Popover */}
+                {colorPopoverOpen && (
+                  <div
+                    data-mind-node="toolbar"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`absolute left-2 top-full mt-2 px-3 py-2.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center gap-2 z-40 animate-fade-in ${
+                      isDark
+                        ? 'bg-slate-900/95 border-slate-700/90 text-slate-200'
+                        : 'bg-white/96 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {COLOR_PALETTES.map((pal) => {
+                      const isActiveColor = selectedPalette.key === pal.key;
+                      return (
+                        <button
+                          key={pal.key}
+                          type="button"
+                          onClick={() => {
+                            onUpdateNode(selectedPositioned.node, { color: pal.key });
+                            setColorPopoverOpen(false);
+                          }}
+                          className="w-5 h-5 rounded-full flex items-center justify-center hover:scale-125 active:scale-95 transition-transform shadow-sm"
+                          style={{
+                            backgroundColor: pal.hex,
+                            boxShadow: isActiveColor
+                              ? `0 0 0 2px ${isDark ? '#0f172a' : '#ffffff'}, 0 0 0 4px ${pal.hex}`
+                              : undefined
+                          }}
+                          title={`套用${pal.label}分支色彩`}
+                        >
+                          {isActiveColor && (
+                            <Check className="w-3 h-3 text-white stroke-[3]" />
+                          )}
+                        </button>
+                      );
+                    })}
+                    <div
+                      className={`w-px h-4 mx-0.5 ${
+                        isDark ? 'bg-slate-700' : 'bg-slate-200'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdateNode(selectedPositioned.node, { color: 'auto' });
+                        setColorPopoverOpen(false);
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors ${
+                        isDark
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      }`}
+                      title="重設為自動分支配色"
+                    >
+                      自動
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* Focused Mode Banner */}
       {focusedNodeId && (
-        <div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-xl shadow-lg text-xs animate-fade-in">
+        <div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-full shadow-lg text-xs animate-fade-in">
           <Focus className="w-3.5 h-3.5" />
           <span className="font-semibold">已聚焦放大節點</span>
           <button
             type="button"
             onClick={() => fitToView(true)}
-            className="px-2 py-0.5 rounded-lg bg-white/20 hover:bg-white/30 font-bold text-[11px]"
+            className="px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 font-bold text-[11px]"
           >
             返回全景
           </button>
@@ -474,111 +836,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
           })}
         </svg>
 
-        {/* 2. Floating Node Quick Action Toolbar (when a node is selected and not inline-editing) */}
-        {selectedPositioned && inlineEditLineIndex !== selectedPositioned.node.lineIndex && (
-          <div
-            data-mind-node="toolbar"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              left: `${selectedPositioned.centerX}px`,
-              top: `${selectedPositioned.y - 10}px`,
-              transform: 'translate(-50%, -100%)'
-            }}
-            className={`absolute z-30 flex items-center gap-1 px-2 py-1 rounded-xl border shadow-xl animate-fade-in whitespace-nowrap ${
-              isDark
-                ? 'bg-slate-900/95 border-slate-700 text-slate-200'
-                : 'bg-white border-slate-300 text-slate-800'
-            }`}
-          >
-            {/* Quick Color Dots */}
-            <div className="flex items-center gap-1 pr-1.5 border-r border-slate-700/50">
-              {COLOR_PALETTES.slice(0, 6).map((pal) => (
-                <button
-                  key={pal.key}
-                  type="button"
-                  onClick={() =>
-                    onUpdateNode(selectedPositioned.node, { color: pal.key })
-                  }
-                  className="w-3.5 h-3.5 rounded-full hover:scale-125 transition-transform"
-                  style={{ backgroundColor: pal.hex }}
-                  title={`套用${pal.label}分支色彩`}
-                />
-              ))}
-            </div>
-
-            {/* Add Child */}
-            <button
-              type="button"
-              onClick={() => onAddChild(selectedPositioned.node)}
-              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[11px] font-semibold text-cyan-400 hover:bg-cyan-500/15"
-              title="新增子節點 (Tab)"
-            >
-              <Plus className="w-3 h-3" />
-              <span>子節點</span>
-            </button>
-
-            {/* Add Sibling */}
-            {selectedPositioned.node.depth > 0 && (
-              <button
-                type="button"
-                onClick={() => onAddSibling(selectedPositioned.node)}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[11px] font-medium hover:bg-slate-800/60"
-                title="新增同級節點 (Enter)"
-              >
-                <CornerDownRight className="w-3 h-3" />
-                <span>同級</span>
-              </button>
-            )}
-
-            {/* Toggle Checkbox */}
-            <button
-              type="button"
-              onClick={() => {
-                const cur = selectedPositioned.node.checked;
-                const next = cur === undefined ? false : cur === false ? true : undefined;
-                onUpdateNode(selectedPositioned.node, { checked: next });
-              }}
-              className="p-1 rounded-lg hover:bg-slate-800/60 text-emerald-400"
-              title="切換待辦核取方塊"
-            >
-              <CheckSquare className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Open Full Detail Modal */}
-            <button
-              type="button"
-              onClick={() => onOpenNodeDetail(selectedPositioned.node)}
-              className="p-1 rounded-lg hover:bg-slate-800/60 text-amber-400"
-              title="編輯節點詳細資訊（備註、連結、標籤）"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Focus Zoom */}
-            <button
-              type="button"
-              onClick={() => handleFocusNode(selectedPositioned.node)}
-              className="p-1 rounded-lg hover:bg-slate-800/60 text-indigo-400"
-              title="聚焦放大此分支"
-            >
-              <Focus className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Delete Node */}
-            {selectedPositioned.node.depth > 0 && (
-              <button
-                type="button"
-                onClick={() => onDeleteNode(selectedPositioned.node)}
-                className="p-1 rounded-lg hover:bg-rose-500/20 text-rose-400"
-                title="刪除此節點與子樹 (Delete)"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* 3. HTML Interactive Node Cards */}
+        {/* 2. HTML Interactive Node Cards */}
         {layout.nodes.map((item) => {
           const { node, x, y, width, height, isExpanded } = item;
           const isRoot = node.depth === 0;
@@ -641,10 +899,12 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               }}
               onClick={(e) => {
                 e.stopPropagation();
+                setColorPopoverOpen(false);
                 onSelectNode(node);
               }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
+                setColorPopoverOpen(false);
                 setInlineDraft(node.text);
                 onStartInlineEdit(node.lineIndex);
               }}
@@ -723,20 +983,30 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                     ref={inlineInputRef}
                     type="text"
                     value={inlineDraft}
+                    placeholder="輸入節點內容..."
                     onChange={(e) => setInlineDraft(e.target.value)}
-                    onBlur={() => commitInlineEdit(node)}
+                    onBlur={() => finishInlineEdit(node, 'commit')}
                     onKeyDown={(e) => {
                       e.stopPropagation();
+                      if (e.nativeEvent.isComposing || e.keyCode === 229) {
+                        return;
+                      }
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        commitInlineEdit(node);
+                        finishInlineEdit(node, 'commit');
+                      } else if (e.key === 'Tab' && !e.shiftKey) {
+                        e.preventDefault();
+                        finishInlineEdit(node, 'addChild');
                       } else if (e.key === 'Escape') {
-                        onStartInlineEdit(null);
+                        e.preventDefault();
+                        finishInlineEdit(node, 'cancel');
                       }
                     }}
                     onClick={(e) => e.stopPropagation()}
                     className={`w-full rounded px-1.5 py-0.5 text-xs font-semibold focus:outline-none ring-2 ring-cyan-400 ${
-                      isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'
+                      isDark
+                        ? 'bg-slate-950 text-white placeholder-slate-500'
+                        : 'bg-slate-100 text-slate-900 placeholder-slate-400'
                     }`}
                   />
                 ) : (
@@ -749,7 +1019,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                         : 'text-xs font-medium'
                     } ${node.checked ? 'line-through opacity-60' : ''}`}
                   >
-                    {node.text}
+                    {node.text || '\u00A0'}
                   </div>
                 )}
               </div>
@@ -870,7 +1140,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               : 'bg-white/90 border-slate-200 text-slate-600'
           }`}
         >
-          <span>💡 單擊節點工具列 · 雙擊直接打字 · Tab 新增子分支 · 拖曳節點改階層</span>
+          <span>💡 單擊節點開啟左上工具筆盒 · 雙擊直接打字 · Tab / Enter 新增節點自動置中 · 拖曳改階層</span>
         </div>
 
         <div
@@ -891,8 +1161,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
           <button
             type="button"
             onClick={() => {
-              setSmoothAnim(true);
-              window.setTimeout(() => setSmoothAnim(false), 240);
+              triggerSmoothAnim(240);
               setZoom(1);
             }}
             className="px-2 py-1 rounded-lg text-[11px] font-mono min-w-[46px] text-center hover:bg-slate-800/40"
@@ -923,3 +1192,4 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     </div>
   );
 };
+

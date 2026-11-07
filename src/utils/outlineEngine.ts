@@ -93,11 +93,16 @@ export function parseLineAttributes(rawTrimmed: string): ParsedLineAttrs {
 /**
  * 將節點屬性組裝回標準單行縮排字串
  */
-export function composeOutlineLine(indentSpaces: number, attrs: ParsedLineAttrs): string {
+export function composeOutlineLine(
+  indentSpaces: number,
+  attrs: ParsedLineAttrs,
+  allowEmptyText: boolean = false
+): string {
   const prefix = ' '.repeat(Math.max(0, indentSpaces));
   const checkPart =
     attrs.checked === true ? '[x] ' : attrs.checked === false ? '[ ] ' : '';
-  const textPart = (attrs.text || '新節點').trim();
+  const trimmedText = (attrs.text ?? '').trim();
+  const textPart = allowEmptyText ? trimmedText : trimmedText || '新節點';
   const tagsPart =
     attrs.tags && attrs.tags.length > 0
       ? ' ' + attrs.tags.map((t) => `#${t.replace(/^#/, '')}`).join(' ')
@@ -125,7 +130,8 @@ interface RawParsedItem {
 export function parseOutlineToTree(
   content: string,
   layoutMode: LayoutMode = 'right',
-  fallbackDocTitle: string = '核心主題'
+  fallbackDocTitle: string = '核心主題',
+  pendingEmptyLineIndex: number | null = null
 ): OutlineNode {
   const rawLines = content.replace(/\r\n/g, '\n').split('\n');
   const stack: RawParsedItem[] = [];
@@ -134,13 +140,17 @@ export function parseOutlineToTree(
   for (let i = 0; i < rawLines.length; i++) {
     const rawLine = rawLines[i];
     const trimmed = rawLine.trim();
-    if (!trimmed || /^mindmap\b/i.test(trimmed) || /^```/.test(trimmed)) {
+    const isPendingEmpty = pendingEmptyLineIndex !== null && i === pendingEmptyLineIndex && !trimmed;
+
+    if ((!trimmed && !isPendingEmpty) || /^mindmap\b/i.test(trimmed) || /^```/.test(trimmed)) {
       continue;
     }
 
     const expandedTabs = rawLine.replace(/\t/g, '  ');
     const indentSpaces = expandedTabs.match(/^\s*/)?.[0].length ?? 0;
-    const attrs = parseLineAttributes(trimmed);
+    const attrs: ParsedLineAttrs = isPendingEmpty
+      ? { text: '', tags: [] }
+      : parseLineAttributes(trimmed);
 
     const item: RawParsedItem = {
       lineIndex: i,
@@ -347,6 +357,7 @@ export function addChildNodeInOutline(
   defaultText: string = '新分支節點'
 ): { content: string; insertedLineIndex: number } {
   const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const allowEmpty = defaultText === '';
 
   // Empty doc edge case
   if (lines.length === 1 && !lines[0].trim()) {
@@ -360,7 +371,7 @@ export function addChildNodeInOutline(
 
   // Virtual root (-1): add a new top-level (indent 0) item at end of document
   if (parentNode.lineIndex < 0) {
-    const newLine = composeOutlineLine(0, { text: defaultText, tags: [] });
+    const newLine = composeOutlineLine(0, { text: defaultText, tags: [] }, allowEmpty);
     lines.push(newLine);
     return {
       content: lines.join('\n'),
@@ -374,7 +385,7 @@ export function addChildNodeInOutline(
       : Math.max(0, parentNode.indentSpaces) + 2;
 
   const insertAt = Math.min(lines.length, parentNode.endLineIndex + 1);
-  const newLine = composeOutlineLine(childIndent, { text: defaultText, tags: [] });
+  const newLine = composeOutlineLine(childIndent, { text: defaultText, tags: [] }, allowEmpty);
   lines.splice(insertAt, 0, newLine);
 
   return {
@@ -397,8 +408,9 @@ export function addSiblingNodeInOutline(
   }
 
   const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const allowEmpty = defaultText === '';
   const insertAt = Math.min(lines.length, node.endLineIndex + 1);
-  const newLine = composeOutlineLine(node.indentSpaces, { text: defaultText, tags: [] });
+  const newLine = composeOutlineLine(node.indentSpaces, { text: defaultText, tags: [] }, allowEmpty);
   lines.splice(insertAt, 0, newLine);
 
   return {
@@ -608,3 +620,4 @@ export function exportTreeToMermaid(root: OutlineNode): string {
   walk(root);
   return out.join('\n') + '\n';
 }
+

@@ -24,7 +24,7 @@ interface RightOutlinerProps {
   onAddTab: () => void;
   onRenameTab: (tabId: string, newTitle: string) => void;
   onCloseTab: (tabId: string) => void;
-  onChangeContent: (newContent: string, nextCursorLine?: number) => void;
+  onChangeContent: (newContent: string, nextCursorLine?: number, triggerCenter?: boolean) => void;
   onActiveLineChange: (lineIdx: number) => void;
   externalJumpLine?: { lineIndex: number; seq: number } | null;
 }
@@ -116,7 +116,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
     }
 
     const nextText = allLines.join('\n');
-    onChangeContent(nextText, startLine);
+    onChangeContent(nextText, startLine, true);
 
     window.requestAnimationFrame(() => {
       if (!textareaRef.current) return;
@@ -493,3 +493,4 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
     </aside>
   );
 };
+

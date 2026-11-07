@@ -119,10 +119,44 @@ export default function App() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  // Parse active tab content into Tree
+  // Cursor & Selection Sync States
+  const [activeLineIndex, setActiveLineIndex] = useState<number>(0);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [inlineEditState, setInlineEditState] = useState<{
+    lineIndex: number;
+    seq: number;
+  } | null>(null);
+  const [pendingNewNode, setPendingNewNode] = useState<{
+    lineIndex: number;
+    fallbackText: string;
+  } | null>(null);
+  const [centerNodeRequest, setCenterNodeRequest] = useState<{
+    nodeId: string;
+    seq: number;
+  } | null>(null);
+  const [externalJumpLine, setExternalJumpLine] = useState<{
+    lineIndex: number;
+    seq: number;
+  } | null>(null);
+
+  const seqRef = useRef<number>(1);
+  const latestContentRef = useRef<string>(activeTab.content);
+  latestContentRef.current = activeTab.content;
+  const pendingNewNodeRef = useRef(pendingNewNode);
+  pendingNewNodeRef.current = pendingNewNode;
+
+  const inlineEditLineIndex = inlineEditState?.lineIndex ?? null;
+  const inlineEditSeq = inlineEditState?.seq ?? 0;
+
+  // Parse active tab content into Tree (keep newly created blank line visible while inline editing)
   const rootNode = useMemo(() => {
-    return parseOutlineToTree(activeTab.content, activeTab.layoutMode, activeTab.title);
-  }, [activeTab.content, activeTab.layoutMode, activeTab.title]);
+    return parseOutlineToTree(
+      activeTab.content,
+      activeTab.layoutMode,
+      activeTab.title,
+      pendingNewNode?.lineIndex ?? null
+    );
+  }, [activeTab.content, activeTab.layoutMode, activeTab.title, pendingNewNode?.lineIndex]);
 
   // Expand Preset & Expanded Node IDs (default: All or 3 levels so initial map looks rich, with easy 1/2/3/all toggle)
   const [expandPreset, setExpandPreset] = useState<number | 'all'>(2);
@@ -137,7 +171,9 @@ export default function App() {
       prevTabIdRef.current = activeTab.id;
       setExpandedIds(collectExpandedByLevel(rootNode, expandPreset));
       setSelectedNodeId(null);
-      setInlineEditLineIndex(null);
+      setInlineEditState(null);
+      setPendingNewNode(null);
+      pendingNewNodeRef.current = null;
     }
   }, [activeTab.id, rootNode, expandPreset]);
 
@@ -157,36 +193,58 @@ export default function App() {
     return computeMindMapLayout(rootNode, expandedIds, activeTab.layoutMode);
   }, [rootNode, expandedIds, activeTab.layoutMode]);
 
-  // Cursor & Selection Sync States
-  const [activeLineIndex, setActiveLineIndex] = useState<number>(0);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [inlineEditLineIndex, setInlineEditLineIndex] = useState<number | null>(null);
-  const [externalJumpLine, setExternalJumpLine] = useState<{
-    lineIndex: number;
-    seq: number;
-  } | null>(null);
-
   // Modals
   const [detailModalNode, setDetailModalNode] = useState<OutlineNode | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
 
+  const expandAncestorsOfLine = useCallback((tree: OutlineNode, lineIdx: number) => {
+    const targetNode = findNodeByLineIndex(tree, lineIdx);
+    if (!targetNode) return;
+    const toExpand: string[] = [];
+    const walkAncestors = (n: OutlineNode): boolean => {
+      if (n.id === targetNode.id) return true;
+      for (const c of n.children) {
+        if (walkAncestors(c)) {
+          toExpand.push(n.id);
+          return true;
+        }
+      }
+      return false;
+    };
+    walkAncestors(tree);
+    if (toExpand.length > 0) {
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of toExpand) next.add(id);
+        return next;
+      });
+    }
+  }, []);
+
   // Update Active Tab Content with History Recording
   const updateActiveContent = useCallback(
-    (newContent: string, cursorLine?: number) => {
-      if (newContent === activeTab.content) return;
+    (newContent: string, cursorLine?: number, recordHistory: boolean = true) => {
+      const prevContent = latestContentRef.current;
+      if (newContent === prevContent) {
+        if (cursorLine !== undefined) setActiveLineIndex(cursorLine);
+        return;
+      }
 
-      setHistoryByTab((prev) => {
-        const cur = prev[activeTab.id] || { past: [], future: [] };
-        const nextPast = [
-          ...cur.past.slice(-59),
-          { content: activeTab.content, cursorLine: activeLineIndex }
-        ];
-        return {
-          ...prev,
-          [activeTab.id]: { past: nextPast, future: [] }
-        };
-      });
+      if (recordHistory) {
+        setHistoryByTab((prev) => {
+          const cur = prev[activeTab.id] || { past: [], future: [] };
+          const nextPast = [
+            ...cur.past.slice(-59),
+            { content: prevContent, cursorLine: activeLineIndex }
+          ];
+          return {
+            ...prev,
+            [activeTab.id]: { past: nextPast, future: [] }
+          };
+        });
+      }
 
+      latestContentRef.current = newContent;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === activeTab.id
@@ -199,7 +257,7 @@ export default function App() {
         setActiveLineIndex(cursorLine);
       }
     },
-    [activeTab.id, activeTab.content, activeLineIndex]
+    [activeTab.id, activeLineIndex]
   );
 
   // Undo & Redo
@@ -212,13 +270,18 @@ export default function App() {
     if (!cur || cur.past.length === 0) return;
     const previous = cur.past[cur.past.length - 1];
     const newPast = cur.past.slice(0, -1);
-    const newFuture = [{ content: activeTab.content, cursorLine: activeLineIndex }, ...cur.future];
+    const newFuture = [{ content: latestContentRef.current, cursorLine: activeLineIndex }, ...cur.future];
+
+    setInlineEditState(null);
+    setPendingNewNode(null);
+    pendingNewNodeRef.current = null;
 
     setHistoryByTab((prev) => ({
       ...prev,
       [activeTab.id]: { past: newPast, future: newFuture }
     }));
 
+    latestContentRef.current = previous.content;
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTab.id ? { ...t, content: previous.content, updatedAt: Date.now() } : t
@@ -227,20 +290,25 @@ export default function App() {
     if (previous.cursorLine !== undefined) {
       setActiveLineIndex(previous.cursorLine);
     }
-  }, [historyByTab, activeTab.id, activeTab.content, activeLineIndex]);
+  }, [historyByTab, activeTab.id, activeLineIndex]);
 
   const handleRedo = useCallback(() => {
     const cur = historyByTab[activeTab.id];
     if (!cur || cur.future.length === 0) return;
     const nextEntry = cur.future[0];
     const newFuture = cur.future.slice(1);
-    const newPast = [...cur.past, { content: activeTab.content, cursorLine: activeLineIndex }];
+    const newPast = [...cur.past, { content: latestContentRef.current, cursorLine: activeLineIndex }];
+
+    setInlineEditState(null);
+    setPendingNewNode(null);
+    pendingNewNodeRef.current = null;
 
     setHistoryByTab((prev) => ({
       ...prev,
       [activeTab.id]: { past: newPast, future: newFuture }
     }));
 
+    latestContentRef.current = nextEntry.content;
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTab.id ? { ...t, content: nextEntry.content, updatedAt: Date.now() } : t
@@ -249,7 +317,7 @@ export default function App() {
     if (nextEntry.cursorLine !== undefined) {
       setActiveLineIndex(nextEntry.cursorLine);
     }
-  }, [historyByTab, activeTab.id, activeTab.content, activeLineIndex]);
+  }, [historyByTab, activeTab.id, activeLineIndex]);
 
   // Global Ctrl+Z / Ctrl+Y listener
   useEffect(() => {
@@ -267,6 +335,49 @@ export default function App() {
     return () => window.removeEventListener('keydown', onGlobalKeyDown);
   }, [handleUndo, handleRedo]);
 
+  const handleStartInlineEdit = (lineIndex: number | null) => {
+    if (lineIndex === null) {
+      setInlineEditState(null);
+      return;
+    }
+    const seq = ++seqRef.current;
+    setInlineEditState({ lineIndex, seq });
+  };
+
+  const spawnNewNodeOnCanvas = (
+    baseContent: string,
+    targetNode: OutlineNode,
+    kind: 'child' | 'sibling'
+  ) => {
+    const fallbackText =
+      kind === 'child' || targetNode.depth === 0 ? '新分支' : '新節點';
+    const res =
+      kind === 'child'
+        ? addChildNodeInOutline(baseContent, targetNode, '')
+        : addSiblingNodeInOutline(baseContent, targetNode, '');
+
+    updateActiveContent(res.content, res.insertedLineIndex, true);
+
+    const pending = { lineIndex: res.insertedLineIndex, fallbackText };
+    pendingNewNodeRef.current = pending;
+    setPendingNewNode(pending);
+
+    const nextTree = parseOutlineToTree(
+      res.content,
+      activeTab.layoutMode,
+      activeTab.title,
+      res.insertedLineIndex
+    );
+    expandAncestorsOfLine(nextTree, res.insertedLineIndex);
+
+    const newNodeId = `line_${res.insertedLineIndex}`;
+    const seq = ++seqRef.current;
+    setSelectedNodeId(newNodeId);
+    setInlineEditState({ lineIndex: res.insertedLineIndex, seq });
+    setCenterNodeRequest({ nodeId: newNodeId, seq });
+    setExternalJumpLine({ lineIndex: res.insertedLineIndex, seq });
+  };
+
   // Graphic Node Mutation Handlers (Two-Way Sync!)
   const handleSelectNodeOnCanvas = (node: OutlineNode | null) => {
     if (!node) {
@@ -276,42 +387,79 @@ export default function App() {
     setSelectedNodeId(node.id);
     if (node.lineIndex >= 0) {
       setActiveLineIndex(node.lineIndex);
-      setExternalJumpLine({ lineIndex: node.lineIndex, seq: Date.now() });
+      setExternalJumpLine({ lineIndex: node.lineIndex, seq: ++seqRef.current });
     }
   };
 
   const handleUpdateNodeOnCanvas = (node: OutlineNode, patch: Partial<ParsedLineAttrs>) => {
-    const res = updateNodeInOutline(activeTab.content, node, patch);
-    updateActiveContent(res.content, res.lineIndex);
+    const res = updateNodeInOutline(latestContentRef.current, node, patch);
+    updateActiveContent(res.content, res.lineIndex, true);
+    if (node.lineIndex < 0) {
+      setSelectedNodeId(`line_${res.lineIndex}`);
+    }
+  };
+
+  const handleCommitInlineEdit = (
+    node: OutlineNode,
+    draftText: string,
+    mode: 'commit' | 'cancel' | 'addChild' | 'addSibling' = 'commit'
+  ) => {
+    const curPending = pendingNewNodeRef.current;
+    const isPendingNew = curPending !== null && curPending.lineIndex === node.lineIndex;
+    const trimmed = draftText.trim();
+
+    let finalText: string;
+    if (mode === 'cancel' && !isPendingNew) {
+      finalText = node.text || '未命名節點';
+    } else if (trimmed.length > 0) {
+      finalText = trimmed;
+    } else if (isPendingNew) {
+      finalText = curPending.fallbackText;
+    } else {
+      finalText = node.text || '未命名節點';
+    }
+
+    const step1 = updateNodeInOutline(latestContentRef.current, node, { text: finalText });
+    // If finalizing a newly inserted blank node, update content in-place without adding an extra blank-line history step
+    updateActiveContent(step1.content, step1.lineIndex, !isPendingNew);
+
+    pendingNewNodeRef.current = null;
+    setPendingNewNode(null);
+
+    if (mode === 'addChild' || mode === 'addSibling') {
+      const updatedTree = parseOutlineToTree(
+        step1.content,
+        activeTab.layoutMode,
+        activeTab.title
+      );
+      const updatedNode = findNodeByLineIndex(updatedTree, step1.lineIndex) || node;
+      spawnNewNodeOnCanvas(
+        step1.content,
+        updatedNode,
+        mode === 'addChild' ? 'child' : 'sibling'
+      );
+      return;
+    }
+
+    setInlineEditState(null);
+    setSelectedNodeId(`line_${step1.lineIndex}`);
   };
 
   const handleAddChildOnCanvas = (parentNode: OutlineNode) => {
-    const res = addChildNodeInOutline(activeTab.content, parentNode, '新分支');
-    updateActiveContent(res.content, res.insertedLineIndex);
-
-    // Ensure parent & new node's ancestors are expanded, then start inline editing on the new graphic node!
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      next.add(parentNode.id);
-      next.add(`line_${parentNode.lineIndex}`);
-      return next;
-    });
-    setSelectedNodeId(`line_${res.insertedLineIndex}`);
-    setInlineEditLineIndex(res.insertedLineIndex);
+    spawnNewNodeOnCanvas(latestContentRef.current, parentNode, 'child');
   };
 
   const handleAddSiblingOnCanvas = (node: OutlineNode) => {
-    const res = addSiblingNodeInOutline(activeTab.content, node, '新節點');
-    updateActiveContent(res.content, res.insertedLineIndex);
-    setSelectedNodeId(`line_${res.insertedLineIndex}`);
-    setInlineEditLineIndex(res.insertedLineIndex);
+    spawnNewNodeOnCanvas(latestContentRef.current, node, 'sibling');
   };
 
   const handleDeleteNodeOnCanvas = (node: OutlineNode) => {
-    const res = deleteNodeSubtreeInOutline(activeTab.content, node);
-    updateActiveContent(res.content, res.nextSelectLineIndex);
+    pendingNewNodeRef.current = null;
+    setPendingNewNode(null);
+    setInlineEditState(null);
+    const res = deleteNodeSubtreeInOutline(latestContentRef.current, node);
+    updateActiveContent(res.content, res.nextSelectLineIndex, true);
     setSelectedNodeId(`line_${res.nextSelectLineIndex}`);
-    setInlineEditLineIndex(null);
   };
 
   const handleReparentOrReorder = (
@@ -319,9 +467,9 @@ export default function App() {
     target: OutlineNode,
     pos: 'inside' | 'before' | 'after'
   ) => {
-    const res = reparentOrReorderSubtree(activeTab.content, source, target, pos);
+    const res = reparentOrReorderSubtree(latestContentRef.current, source, target, pos);
     if (!res) return;
-    updateActiveContent(res.content, res.newLineIndex);
+    updateActiveContent(res.content, res.newLineIndex, true);
     if (pos === 'inside') {
       setExpandedIds((prev) => {
         const next = new Set(prev);
@@ -355,32 +503,30 @@ export default function App() {
     setExpandedIds(collectExpandedByLevel(rootNode, preset));
   };
 
-  // When user types a deeper line in the right outliner, auto-expand its ancestors so they see it live on the MindMap!
-  const handleOutlinerContentChange = (newContent: string, nextCursorLine?: number) => {
-    updateActiveContent(newContent, nextCursorLine);
+  // When user types a deeper line in the right outliner, auto-expand its ancestors and center newly added/indented nodes!
+  const handleOutlinerContentChange = (
+    newContent: string,
+    nextCursorLine?: number,
+    triggerCenter?: boolean
+  ) => {
+    const hadNodeBefore =
+      nextCursorLine !== undefined ? findNodeByLineIndex(rootNode, nextCursorLine) !== null : true;
+
+    if (pendingNewNodeRef.current) {
+      pendingNewNodeRef.current = null;
+      setPendingNewNode(null);
+    }
+
+    updateActiveContent(newContent, nextCursorLine, true);
+
     if (nextCursorLine !== undefined) {
       const nextTree = parseOutlineToTree(newContent, activeTab.layoutMode, activeTab.title);
       const addedOrEdited = findNodeByLineIndex(nextTree, nextCursorLine);
       if (addedOrEdited) {
-        // Walk tree to expand ancestors of active cursor line
-        const toExpand: string[] = [];
-        const walkAncestors = (n: OutlineNode): boolean => {
-          if (n.id === addedOrEdited.id) return true;
-          for (const c of n.children) {
-            if (walkAncestors(c)) {
-              toExpand.push(n.id);
-              return true;
-            }
-          }
-          return false;
-        };
-        walkAncestors(nextTree);
-        if (toExpand.length > 0) {
-          setExpandedIds((prev) => {
-            const next = new Set(prev);
-            for (const id of toExpand) next.add(id);
-            return next;
-          });
+        expandAncestorsOfLine(nextTree, nextCursorLine);
+        if (triggerCenter || !hadNodeBefore) {
+          const seq = ++seqRef.current;
+          setCenterNodeRequest({ nodeId: addedOrEdited.id, seq });
         }
       }
     }
@@ -569,8 +715,11 @@ export default function App() {
             activeLineIndex={activeLineIndex}
             selectedNodeId={selectedNodeId}
             inlineEditLineIndex={inlineEditLineIndex}
+            inlineEditSeq={inlineEditSeq}
+            centerNodeRequest={centerNodeRequest}
             onSelectNode={handleSelectNodeOnCanvas}
-            onStartInlineEdit={setInlineEditLineIndex}
+            onStartInlineEdit={handleStartInlineEdit}
+            onCommitInlineEdit={handleCommitInlineEdit}
             onUpdateNode={handleUpdateNodeOnCanvas}
             onAddChild={handleAddChildOnCanvas}
             onAddSibling={handleAddSiblingOnCanvas}
@@ -638,3 +787,4 @@ export default function App() {
     </div>
   );
 }
+

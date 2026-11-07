@@ -73,7 +73,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
               <span>左側心智圖直接互動操作</span>
             </div>
             {[
-              ['單擊節點', '選取並顯示快速換色、新增、聚焦工具列'],
+              ['單擊節點', '選取節點，於左上搜尋旁顯示畫筆工具膠囊'],
               ['雙擊節點 / F2', '直接在圖形卡片上打字修改內容'],
               ['Tab（選取節點時）', '直接在圖形上長出子節點並開始打字'],
               ['Enter（選取節點時）', '在圖形下方新增同級節點並開始打字'],
@@ -119,3 +119,4 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
     </div>
   );
 };
+
