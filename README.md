@@ -1,5 +1,9 @@
 # Typemindmap — 左圖右文雙向同步心智圖工作台
 
+[![Deploy to GitHub Pages](https://github.com/etsaycood/Typemindmap/actions/workflows/deploy.yml/badge.svg)](https://github.com/etsaycood/Typemindmap/actions/workflows/deploy.yml)
+
+🔗 **線上網址**：[**https://etsaycood.github.io/Typemindmap/**](https://etsaycood.github.io/Typemindmap/)
+
 **Typemindmap** 是一款以鍵盤極速輸入為核心、兼具圖形直接互動能力的純前端心智圖應用程式（靈感源自 [txt2map.com](https://txt2map.com/)，並採用 **「左側互動心智圖畫布 + 右側縮排大綱打字區」** 雙向即時同步架構）。
 
 所有內容 **100% 儲存在您的瀏覽器本地（LocalStorage）**，無需註冊、零伺服器上傳，打開即用。
@@ -51,3 +55,4 @@ npm run dev
 ```bash
 npm run build
 ```
+
