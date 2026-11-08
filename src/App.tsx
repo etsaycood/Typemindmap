@@ -4,7 +4,8 @@ import {
   HistoryEntry,
   LayoutMode,
   OutlineNode,
-  ThemeMode
+  ThemeMode,
+  LanguageMode
 } from './types/mindmap';
 import {
   addChildNodeInOutline,
@@ -25,6 +26,7 @@ import {
   exportAsPngFile,
   exportAsSvgFile
 } from './utils/exportHelper';
+import { I18N } from './utils/i18n';
 import { TopToolbar } from './components/TopToolbar';
 import { MindMapCanvas } from './components/MindMapCanvas';
 import { RightOutliner } from './components/RightOutliner';
@@ -53,11 +55,12 @@ export default function App() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed.tabs) && parsed.tabs.length > 0) {
-          return parsed as {
-            tabs: DocumentTab[];
-            activeTabId: string;
-            theme: ThemeMode;
-            rightWidthPercent: number;
+          return {
+            tabs: parsed.tabs as DocumentTab[],
+            activeTabId: parsed.activeTabId as string,
+            theme: (parsed.theme || 'dark') as ThemeMode,
+            rightWidthPercent: (parsed.rightWidthPercent || 35) as number,
+            language: ((parsed.language as LanguageMode) || 'zh') as LanguageMode
           };
         }
       }
@@ -76,13 +79,15 @@ export default function App() {
       tabs: [firstTab],
       activeTabId: firstTab.id,
       theme: 'dark' as ThemeMode,
-      rightWidthPercent: 35
+      rightWidthPercent: 35,
+      language: 'zh' as LanguageMode
     };
   }, []);
 
   const [tabs, setTabs] = useState<DocumentTab[]>(initialWorkspace.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(initialWorkspace.activeTabId);
   const [theme, setTheme] = useState<ThemeMode>(initialWorkspace.theme || 'dark');
+  const [language, setLanguage] = useState<LanguageMode>(initialWorkspace.language || 'zh');
   const [rightWidthPercent, setRightWidthPercent] = useState<number>(
     initialWorkspace.rightWidthPercent || 35
   );
@@ -106,13 +111,14 @@ export default function App() {
           tabs,
           activeTabId: activeTab.id,
           theme,
-          rightWidthPercent
+          rightWidthPercent,
+          language
         })
       );
     } catch {
       // ignore quota error
     }
-  }, [tabs, activeTab.id, theme, rightWidthPercent]);
+  }, [tabs, activeTab.id, theme, rightWidthPercent, language]);
 
   // Sync HTML root class for dark mode
   useEffect(() => {
@@ -535,10 +541,11 @@ export default function App() {
   // Tab Management
   const handleAddTab = () => {
     const idx = tabs.length + 1;
+    const t = I18N[language];
     const newTab: DocumentTab = {
       id: `tab_${Date.now()}`,
-      title: `未命名導圖 ${idx}`,
-      content: `核心主題 ${idx}\n  第一分支\n    子項目 A\n    子項目 B\n  第二分支\n    [ ] 待辦事項 #重點`,
+      title: `${t.newTabTitlePrefix} ${idx}`,
+      content: `${t.defaultRootTitle} ${idx}\n  ${t.defaultBranch1}\n    ${t.defaultItemA}\n    ${t.defaultItemB}\n  ${t.defaultBranch2}\n    ${t.defaultTodo}`,
       layoutMode: 'right',
       updatedAt: Date.now()
     };
@@ -605,7 +612,7 @@ export default function App() {
   // Export / Import Handlers
   const handleExportPng = () => {
     exportAsPngFile(layout, theme, activeTab.title).catch((err) =>
-      alert(err.message || '匯出 PNG 失敗')
+      alert(err.message || (language === 'zh' ? '匯出 PNG 失敗' : 'Failed to export PNG'))
     );
   };
 
@@ -658,10 +665,10 @@ export default function App() {
           setTabs(parsed.tabs);
           setActiveTabId(parsed.tabs[0].id);
         } else {
-          alert('JSON 格式不包含有效的 Typemindmap 分頁資料');
+          alert(language === 'zh' ? 'JSON 格式不包含有效的 Typemindmap 分頁資料' : 'JSON file does not contain valid Typemindmap workspace data');
         }
       } catch {
-        alert('無法解析 JSON 備份檔');
+        alert(language === 'zh' ? '無法解析 JSON 備份檔' : 'Failed to parse JSON backup file');
       }
     };
     reader.readAsText(file);
@@ -676,6 +683,7 @@ export default function App() {
       {/* Top Toolbar */}
       <TopToolbar
         theme={theme}
+        language={language}
         layoutMode={activeTab.layoutMode}
         expandPreset={expandPreset}
         canUndo={canUndo}
@@ -694,6 +702,7 @@ export default function App() {
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
         onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onToggleLanguage={() => setLanguage((prev) => (prev === 'zh' ? 'en' : 'zh'))}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onToggleRightPanel={() => setIsRightPanelOpen((v) => !v)}
       />
@@ -712,6 +721,7 @@ export default function App() {
             layout={layout}
             layoutMode={activeTab.layoutMode}
             theme={theme}
+            language={language}
             activeLineIndex={activeLineIndex}
             selectedNodeId={selectedNodeId}
             inlineEditLineIndex={inlineEditLineIndex}
@@ -741,7 +751,7 @@ export default function App() {
                   ? 'bg-slate-900 hover:bg-cyan-500/30'
                   : 'bg-slate-200 hover:bg-cyan-500/30'
               }`}
-              title="拖曳調整左側心智圖與右側打字區寬度比例"
+              title={language === 'zh' ? '拖曳調整左側心智圖與右側打字區寬度比例' : 'Drag to resize split ratio between MindMap and Outliner'}
             >
               <div className="w-0.5 h-10 rounded-full bg-slate-600 group-hover:bg-cyan-400 transition-colors" />
             </div>
@@ -757,6 +767,7 @@ export default function App() {
                 rootNode={rootNode}
                 activeLineIndex={activeLineIndex}
                 theme={theme}
+                language={language}
                 onSelectTab={setActiveTabId}
                 onAddTab={handleAddTab}
                 onRenameTab={handleRenameTab}
@@ -774,6 +785,7 @@ export default function App() {
       <NodeDetailModal
         node={detailModalNode}
         theme={theme}
+        language={language}
         onClose={() => setDetailModalNode(null)}
         onSave={handleUpdateNodeOnCanvas}
       />
@@ -782,6 +794,7 @@ export default function App() {
       <ShortcutsModal
         isOpen={shortcutsOpen}
         theme={theme}
+        language={language}
         onClose={() => setShortcutsOpen(false)}
       />
     </div>

@@ -1,20 +1,24 @@
 import React from 'react';
-import { ThemeMode } from '../types/mindmap';
+import { ThemeMode, LanguageMode } from '../types/mindmap';
 import { X, Keyboard, MousePointerClick, Code2 } from 'lucide-react';
+import { I18N } from '../utils/i18n';
 
 interface ShortcutsModalProps {
   isOpen: boolean;
   theme: ThemeMode;
+  language: LanguageMode;
   onClose: () => void;
 }
 
 export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
   isOpen,
   theme,
+  language,
   onClose
 }) => {
   if (!isOpen) return null;
   const isDark = theme === 'dark';
+  const t = I18N[language];
 
   return (
     <div
@@ -32,7 +36,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
         <div className="flex items-center justify-between border-b pb-3 mb-4 border-slate-700/40">
           <div className="flex items-center gap-2">
             <Keyboard className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-base font-bold">Typemindmap 鍵盤快捷鍵與大綱語法指南</h2>
+            <h2 className="text-base font-bold">{t.shortcutsModalTitle}</h2>
           </div>
           <button
             type="button"
@@ -48,14 +52,14 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
           <div className="space-y-2.5">
             <div className="font-bold text-cyan-400 flex items-center gap-1.5 text-sm">
               <Keyboard className="w-4 h-4" />
-              <span>右側大綱打字區快捷鍵</span>
+              <span>{t.shortcutsOutlinerHeading}</span>
             </div>
             {[
-              ['Enter', '新增同層級節點（自動對齊縮排）'],
-              ['Tab', '向內縮排一層（轉為子節點）'],
-              ['Shift + Tab', '向外凸排一層（提升父層級）'],
-              ['Alt + ↑ / ↓', '整塊上下移動節點與其所有子樹'],
-              ['Ctrl + Z / Y', '復原 (Undo) / 重做 (Redo)']
+              ['Enter', t.scEnterOutliner],
+              ['Tab', t.scTabOutliner],
+              ['Shift + Tab', t.scShiftTabOutliner],
+              ['Alt + ↑ / ↓', t.scAltArrows],
+              ['Ctrl + Z / Y', t.scUndoRedo]
             ].map(([k, desc]) => (
               <div key={k} className="flex items-center justify-between gap-2 py-1 border-b border-slate-800/50">
                 <kbd className="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[11px] border border-slate-700">
@@ -70,15 +74,15 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
           <div className="space-y-2.5">
             <div className="font-bold text-indigo-400 flex items-center gap-1.5 text-sm">
               <MousePointerClick className="w-4 h-4" />
-              <span>左側心智圖直接互動操作</span>
+              <span>{t.shortcutsMindMapHeading}</span>
             </div>
             {[
-              ['單擊節點', '選取節點，於左上搜尋旁顯示畫筆工具膠囊'],
-              ['雙擊節點 / F2', '直接在圖形卡片上打字修改內容'],
-              ['Tab（選取節點時）', '直接在圖形上長出子節點並開始打字'],
-              ['Enter（選取節點時）', '在圖形下方新增同級節點並開始打字'],
-              ['Delete（選取節點時）', '刪除選取節點及其所有子分支'],
-              ['按住拖曳節點', '拖至其他節點以改變父子階層或上下順序']
+              [language === 'zh' ? '單擊節點' : 'Click Node', t.scClickNode],
+              [language === 'zh' ? '雙擊節點 / F2' : 'Double Click / F2', t.scDblClickNode],
+              [language === 'zh' ? 'Tab（選取節點時）' : 'Tab (Selected)', t.scTabCanvas],
+              [language === 'zh' ? 'Enter（選取節點時）' : 'Enter (Selected)', t.scEnterCanvas],
+              [language === 'zh' ? 'Delete（選取節點時）' : 'Delete (Selected)', t.scDeleteCanvas],
+              [language === 'zh' ? '按住拖曳節點' : 'Drag Node', t.scDragCanvas]
             ].map(([k, desc]) => (
               <div key={k} className="flex items-center justify-between gap-2 py-1 border-b border-slate-800/50">
                 <kbd className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 font-mono text-[11px] border border-slate-700 whitespace-nowrap">
@@ -94,24 +98,24 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({
         <div className="mt-5 pt-4 border-t border-slate-700/40 text-xs space-y-2">
           <div className="font-bold text-emerald-400 flex items-center gap-1.5 text-sm">
             <Code2 className="w-4 h-4" />
-            <span>行內智慧增強語法（打字即渲染，圖形修改亦自動寫回）</span>
+            <span>{t.shortcutsSyntaxHeading}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-400">
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
-              <code className="text-emerald-300 font-mono">[ ] 任務</code> 或 <code className="text-emerald-300 font-mono">[x] 任務</code>
-              <div className="mt-0.5 text-[11px]">產生可直接在圖形點擊打勾的待辦方塊</div>
+              <code className="text-emerald-300 font-mono">[ ] 任務</code> / <code className="text-emerald-300 font-mono">[x] 任務</code>
+              <div className="mt-0.5 text-[11px]">{t.syntaxTodoDesc}</div>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
               <code className="text-cyan-300 font-mono">#重點 #Q4</code>
-              <div className="mt-0.5 text-[11px]">為節點加上醒目的彩色標籤徽章</div>
+              <div className="mt-0.5 text-[11px]">{t.syntaxTagDesc}</div>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
               <code className="text-amber-300 font-mono">// 補充說明文字</code>
-              <div className="mt-0.5 text-[11px]">在節點卡片下方顯示精簡備註小字</div>
+              <div className="mt-0.5 text-[11px]">{t.syntaxNoteDesc}</div>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
               <code className="text-purple-300 font-mono">@color(emerald)</code> / <code className="text-blue-300 font-mono">https://...</code>
-              <div className="mt-0.5 text-[11px]">指定分支顏色或附加可點擊外部連結</div>
+              <div className="mt-0.5 text-[11px]">{t.syntaxColorLinkDesc}</div>
             </div>
           </div>
         </div>

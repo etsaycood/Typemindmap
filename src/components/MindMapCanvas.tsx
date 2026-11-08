@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { LayoutMode, OutlineNode, ThemeMode } from '../types/mindmap';
+import { LanguageMode, LayoutMode, OutlineNode, ThemeMode } from '../types/mindmap';
+import { I18N } from '../utils/i18n';
 import {
   COLOR_PALETTES,
   MindMapLayoutResult,
@@ -34,6 +35,7 @@ interface MindMapCanvasProps {
   layout: MindMapLayoutResult;
   layoutMode: LayoutMode;
   theme: ThemeMode;
+  language: LanguageMode;
   activeLineIndex: number;
   selectedNodeId: string | null;
   inlineEditLineIndex: number | null;
@@ -64,6 +66,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   layout,
   layoutMode,
   theme,
+  language,
   activeLineIndex,
   selectedNodeId,
   inlineEditLineIndex,
@@ -117,6 +120,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   } | null>(null);
 
   const isDark = theme === 'dark';
+  const t = I18N[language];
 
   const triggerSmoothAnim = useCallback((durationMs: number = 320) => {
     if (smoothTimerRef.current !== null) {
@@ -492,7 +496,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜尋節點文字或標籤..."
+                placeholder={t.searchPlaceholder}
                 autoFocus
                 className="bg-transparent text-xs focus:outline-none w-40 sm:w-44"
               />
@@ -507,7 +511,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                     ? 'text-slate-400 hover:bg-slate-800 hover:text-rose-400'
                     : 'text-slate-400 hover:bg-slate-100 hover:text-rose-500'
                 }`}
-                title="關閉搜尋"
+                title={t.closeSearch}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -521,10 +525,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                   ? 'bg-slate-900/88 hover:bg-slate-800/95 border-slate-700/80 text-slate-200 shadow-black/35'
                   : 'bg-white/90 hover:bg-white border-slate-200/90 text-slate-700 shadow-slate-300/50'
               }`}
-              title="搜尋地圖節點"
+              title={t.searchButton}
             >
               <Search className="w-3.5 h-3.5 text-cyan-500" />
-              <span>搜尋節點</span>
+              <span>{t.searchButton}</span>
             </button>
           )}
         </div>
@@ -548,7 +552,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                 style={{
                   boxShadow: `0 0 0 2px ${selectedPalette.hex}55, 0 8px 20px -4px rgba(0, 0, 0, 0.28)`
                 }}
-                title="展開節點工具筆盒（換色、新增、待辦、聚焦、刪除）"
+                title={t.toolPillExpandTooltip}
               >
                 <Pencil className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
                 <span
@@ -579,7 +583,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       ? 'bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30'
                       : 'bg-cyan-50 text-cyan-600 hover:bg-cyan-100'
                   }`}
-                  title="收合為單一畫筆圖示"
+                  title={t.toolPillCollapseTooltip}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -597,7 +601,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                   className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95 ${
                     colorPopoverOpen ? (isDark ? 'bg-slate-800' : 'bg-slate-100') : ''
                   }`}
-                  title="切換節點分支色彩"
+                  title={t.colorSwatchTooltip}
                 >
                   <span
                     className="w-4 h-4 rounded-full ring-2 ring-white/90 shadow-sm"
@@ -617,7 +621,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       ? 'text-cyan-400 hover:bg-cyan-500/20'
                       : 'text-cyan-600 hover:bg-cyan-50'
                   }`}
-                  title="新增子節點 (Tab)"
+                  title={t.addChildTooltip}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -635,7 +639,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                         ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
-                    title="新增同級節點 (Enter)"
+                    title={t.addSiblingTooltip}
                   >
                     <CornerDownRight className="w-3.5 h-3.5" />
                   </button>
@@ -658,7 +662,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       ? 'text-emerald-400/85 hover:bg-slate-800 hover:text-emerald-300'
                       : 'text-emerald-600 hover:bg-slate-100'
                   }`}
-                  title="切換待辦核取方塊"
+                  title={t.toggleCheckTooltip}
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
                 </button>
@@ -677,7 +681,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       ? 'text-amber-400/85 hover:bg-slate-800 hover:text-amber-300'
                       : 'text-amber-600 hover:bg-slate-100'
                   }`}
-                  title="編輯節點詳細資訊（備註、連結、標籤）"
+                  title={t.nodeDetailTooltip}
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
                   {selectedHasMeta && (
@@ -699,7 +703,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       ? 'text-indigo-400 hover:bg-slate-800 hover:text-indigo-300'
                       : 'text-indigo-600 hover:bg-slate-100'
                   }`}
-                  title="聚焦放大此分支"
+                  title={t.focusBranchTooltip}
                 >
                   <Focus className="w-3.5 h-3.5" />
                 </button>
@@ -719,7 +723,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                         onDeleteNode(selectedPositioned.node);
                       }}
                       className="w-7 h-7 rounded-full flex items-center justify-center text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-colors"
-                      title="刪除此節點與子樹 (Delete)"
+                      title={t.deleteNodeTooltip}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -754,7 +758,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                               ? `0 0 0 2px ${isDark ? '#0f172a' : '#ffffff'}, 0 0 0 4px ${pal.hex}`
                               : undefined
                           }}
-                          title={`套用${pal.label}分支色彩`}
+                          title={t.applyColor(pal.label)}
                         >
                           {isActiveColor && (
                             <Check className="w-3 h-3 text-white stroke-[3]" />
@@ -778,9 +782,9 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                           ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                           : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
                       }`}
-                      title="重設為自動分支配色"
+                      title={t.resetAutoColor}
                     >
-                      自動
+                      {t.autoColor}
                     </button>
                   </div>
                 )}
@@ -794,13 +798,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       {focusedNodeId && (
         <div className="absolute top-3 right-3 z-30 flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-full shadow-lg text-xs animate-fade-in">
           <Focus className="w-3.5 h-3.5" />
-          <span className="font-semibold">已聚焦放大節點</span>
+          <span className="font-semibold">{t.focusedBanner}</span>
           <button
             type="button"
             onClick={() => fitToView(true)}
             className="px-2 py-0.5 rounded-full bg-white/20 hover:bg-white/30 font-bold text-[11px]"
           >
-            返回全景
+            {t.backToOverview}
           </button>
         </div>
       )}
@@ -951,10 +955,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               {curDrop && (
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap shadow">
                   {curDrop === 'inside'
-                    ? '放開設為子節點'
+                    ? t.dropInside
                     : curDrop === 'before'
-                    ? '放開插入至上方'
-                    : '放開插入至下方'}
+                    ? t.dropBefore
+                    : t.dropAfter}
                 </div>
               )}
 
@@ -968,7 +972,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       onUpdateNode(node, { checked: !node.checked });
                     }}
                     className="mt-0.5 text-emerald-400 hover:scale-110 transition-transform flex-shrink-0"
-                    title="點擊切換完成狀態"
+                    title={t.toggleCheckTooltip}
                   >
                     {node.checked ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -983,7 +987,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                     ref={inlineInputRef}
                     type="text"
                     value={inlineDraft}
-                    placeholder="輸入節點內容..."
+                    placeholder={t.nodeInputPlaceholder}
                     onChange={(e) => setInlineDraft(e.target.value)}
                     onBlur={() => finishInlineEdit(node, 'commit')}
                     onKeyDown={(e) => {
@@ -1045,7 +1049,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                       title={node.url}
                     >
                       <ExternalLink className="w-2.5 h-2.5" />
-                      <span>連結</span>
+                      <span>{t.linkBadge}</span>
                     </a>
                   )}
                 </div>
@@ -1076,7 +1080,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                     ? '-left-2.5 top-1/2 -translate-y-1/2'
                     : '-right-2.5 top-1/2 -translate-y-1/2'
                 } ${hasChildren ? (growDown ? '!-bottom-8' : growLeft ? '!-left-9' : '!-right-9') : ''}`}
-                title="點擊新增子節點"
+                title={t.addChildTooltip}
               >
                 <Plus className="w-3 h-3" />
               </button>
@@ -1102,7 +1106,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                         : 'w-5 h-5 bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
                       : 'px-1.5 h-5 text-[10px] font-bold bg-indigo-600 text-white border-indigo-400'
                   }`}
-                  title={isExpanded ? '收合子分支' : `展開 ${node.children.length} 個子節點`}
+                  title={isExpanded ? t.collapseChildren : t.expandChildren(node.children.length)}
                 >
                   {isExpanded ? (
                     growDown ? (
@@ -1140,7 +1144,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               : 'bg-white/90 border-slate-200 text-slate-600'
           }`}
         >
-          <span>💡 單擊節點開啟左上工具筆盒 · 雙擊直接打字 · Tab / Enter 新增節點自動置中 · 拖曳改階層</span>
+          <span>{t.bottomHint}</span>
         </div>
 
         <div
@@ -1154,7 +1158,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
             type="button"
             onClick={() => handleZoomStep(0.85)}
             className="p-1.5 rounded-lg hover:bg-slate-800/40"
-            title="縮小"
+            title={t.zoomOut}
           >
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
@@ -1165,7 +1169,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               setZoom(1);
             }}
             className="px-2 py-1 rounded-lg text-[11px] font-mono min-w-[46px] text-center hover:bg-slate-800/40"
-            title="重設 100% 比例"
+            title={t.zoomReset}
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -1173,7 +1177,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
             type="button"
             onClick={() => handleZoomStep(1.18)}
             className="p-1.5 rounded-lg hover:bg-slate-800/40"
-            title="放大"
+            title={t.zoomIn}
           >
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
@@ -1182,10 +1186,10 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
             type="button"
             onClick={() => fitToView(true)}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-cyan-500 hover:bg-cyan-500/15"
-            title="適應視窗置中 (或按滑鼠中鍵)"
+            title={t.fitCenter}
           >
             <RotateCcw className="w-3 h-3" />
-            <span className="hidden md:inline">置中適應</span>
+            <span className="hidden md:inline">{t.fitCenterLabel}</span>
           </button>
         </div>
       </div>

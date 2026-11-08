@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { DocumentTab, OutlineNode, ThemeMode } from '../types/mindmap';
+import { DocumentTab, LanguageMode, OutlineNode, ThemeMode } from '../types/mindmap';
+import { I18N } from '../utils/i18n';
 import { moveSubtreeVertical } from '../utils/outlineEngine';
 import {
   Plus,
@@ -20,6 +21,7 @@ interface RightOutlinerProps {
   rootNode: OutlineNode;
   activeLineIndex: number;
   theme: ThemeMode;
+  language: LanguageMode;
   onSelectTab: (tabId: string) => void;
   onAddTab: () => void;
   onRenameTab: (tabId: string, newTitle: string) => void;
@@ -36,6 +38,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
   rootNode,
   activeLineIndex,
   theme,
+  language,
   onSelectTab,
   onAddTab,
   onRenameTab,
@@ -50,6 +53,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
   const [renameValue, setRenameValue] = useState<string>('');
 
   const isDark = theme === 'dark';
+  const t = I18N[language];
   const lines = content.replace(/\r\n/g, '\n').split('\n');
 
   // Sync scroll between gutter and textarea
@@ -268,7 +272,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
                     ? 'bg-slate-900/50 border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                     : 'bg-transparent border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/60'
                 }`}
-                title="點擊切換圖表；雙擊重新命名"
+                title={t.tabTooltip}
               >
                 {isRenaming ? (
                   <input
@@ -296,7 +300,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
                       onCloseTab(tab.id);
                     }}
                     className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-rose-500/20 hover:text-rose-400 transition-opacity"
-                    title="刪除此分頁圖表"
+                    title={t.deleteTabTooltip}
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -313,7 +317,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
                 ? 'hover:bg-slate-800 text-slate-400 hover:text-cyan-300'
                 : 'hover:bg-slate-200 text-slate-600 hover:text-cyan-700'
             }`}
-            title="新增空白心智圖分頁"
+            title={t.addTabTooltip}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -335,7 +339,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             className={`p-1 rounded-lg transition-colors ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
-            title="向內縮排建立子節點 (Tab)"
+            title={t.indentTooltip}
           >
             <IndentIncrease className="w-3.5 h-3.5" />
           </button>
@@ -345,7 +349,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             className={`p-1 rounded-lg transition-colors ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
-            title="向外凸排提升層級 (Shift + Tab)"
+            title={t.outdentTooltip}
           >
             <IndentDecrease className="w-3.5 h-3.5" />
           </button>
@@ -358,7 +362,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             className={`p-1 rounded-lg transition-colors ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
-            title="將此分支整塊上移 (Alt + ↑)"
+            title={t.moveUpTooltip}
           >
             <ArrowUp className="w-3.5 h-3.5" />
           </button>
@@ -368,7 +372,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             className={`p-1 rounded-lg transition-colors ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
-            title="將此分支整塊下移 (Alt + ↓)"
+            title={t.moveDownTooltip}
           >
             <ArrowDown className="w-3.5 h-3.5" />
           </button>
@@ -384,7 +388,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             title="切換待辦方塊 [ ] / [x]"
           >
             <CheckSquare className="w-3.5 h-3.5" />
-            <span>待辦</span>
+            <span>{t.todoButton}</span>
           </button>
 
           <button
@@ -396,7 +400,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             title="插入 #標籤"
           >
             <Hash className="w-3.5 h-3.5" />
-            <span>標籤</span>
+            <span>{t.tagButton}</span>
           </button>
 
           <button
@@ -408,12 +412,12 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             title="插入 // 備註說明"
           >
             <StickyNote className="w-3.5 h-3.5" />
-            <span>備註</span>
+            <span>{t.noteButton}</span>
           </button>
         </div>
 
         <span className="font-mono text-[10px] opacity-75">
-          {rootNode.totalDescendants + 1} 節點
+          {t.nodesCount(rootNode.totalDescendants + 1)}
         </span>
       </div>
 
@@ -463,7 +467,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
           onScroll={handleScroll}
           spellCheck={false}
           wrap="off"
-          placeholder="第一行輸入核心主題&#10;  按 Tab 縮排建立子節點&#10;  按 Enter 建立同級節點"
+          placeholder={t.editorPlaceholder}
           className={`flex-1 h-full py-3 px-3.5 leading-6 resize-none focus:outline-none overflow-auto select-text ${
             isDark
               ? 'bg-slate-950/30 text-slate-100 placeholder-slate-600'
@@ -487,8 +491,8 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             : 'bg-slate-50 border-slate-200 text-slate-500'
         }`}
       >
-        <span>Tab 縮排 · Shift+Tab 凸排 · Alt+↑↓ 移動分支</span>
-        <span className="text-emerald-500/90 font-medium">● 本地自動儲存</span>
+        <span>{t.footerShortcuts}</span>
+        <span className="text-emerald-500/90 font-medium">{t.autoSaved}</span>
       </div>
     </aside>
   );

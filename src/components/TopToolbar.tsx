@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { LayoutMode, ThemeMode } from '../types/mindmap';
+import { LanguageMode, LayoutMode, ThemeMode } from '../types/mindmap';
+import { I18N } from '../utils/i18n';
 import { MINDMAP_TEMPLATES, MindMapTemplate } from '../utils/templates';
 import {
   Network,
@@ -21,11 +22,13 @@ import {
   Image as ImageIcon,
   FileCode2,
   FileText,
-  FileJson
+  FileJson,
+  Languages
 } from 'lucide-react';
 
 interface TopToolbarProps {
   theme: ThemeMode;
+  language: LanguageMode;
   layoutMode: LayoutMode;
   expandPreset: number | 'all';
   canUndo: boolean;
@@ -44,12 +47,14 @@ interface TopToolbarProps {
   onExportJson: () => void;
   onImportJson: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onToggleTheme: () => void;
+  onToggleLanguage: () => void;
   onOpenShortcuts: () => void;
   onToggleRightPanel: () => void;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
   theme,
+  language,
   layoutMode,
   expandPreset,
   canUndo,
@@ -68,6 +73,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onExportJson,
   onImportJson,
   onToggleTheme,
+  onToggleLanguage,
   onOpenShortcuts,
   onToggleRightPanel
 }) => {
@@ -75,12 +81,13 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   const [showExport, setShowExport] = useState(false);
 
   const isDark = theme === 'dark';
+  const t = I18N[language];
 
   const layoutOptions: { id: LayoutMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'right', label: '右側邏輯', icon: <AlignLeft className="w-3.5 h-3.5" /> },
-    { id: 'balanced', label: '雙向平衡', icon: <GitFork className="w-3.5 h-3.5 rotate-90" /> },
-    { id: 'left', label: '左側邏輯', icon: <AlignRight className="w-3.5 h-3.5" /> },
-    { id: 'top-down', label: '垂直樹狀', icon: <Network className="w-3.5 h-3.5" /> }
+    { id: 'right', label: t.layoutRight, icon: <AlignLeft className="w-3.5 h-3.5" /> },
+    { id: 'balanced', label: t.layoutBalanced, icon: <GitFork className="w-3.5 h-3.5 rotate-90" /> },
+    { id: 'left', label: t.layoutLeft, icon: <AlignRight className="w-3.5 h-3.5" /> },
+    { id: 'top-down', label: t.layoutTopDown, icon: <Network className="w-3.5 h-3.5" /> }
   ];
 
   return (
@@ -106,7 +113,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                   : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
               }`}
             >
-              左圖右文 · 雙向同步
+              {t.brandSubtitle}
             </span>
           </div>
         </div>
@@ -122,7 +129,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 ${
               isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'
             }`}
-            title="復原 (Ctrl + Z)"
+            title={t.undo}
           >
             <Undo2 className="w-4 h-4" />
           </button>
@@ -133,7 +140,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             className={`p-1.5 rounded-lg transition-colors disabled:opacity-30 ${
               isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'
             }`}
-            title="重做 (Ctrl + Y)"
+            title={t.redo}
           >
             <Redo2 className="w-4 h-4" />
           </button>
@@ -162,7 +169,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                     ? 'text-slate-400 hover:text-slate-200'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title={`切換為${opt.label}佈局`}
+                title={t.layoutSwitchTitle(opt.label)}
               >
                 {opt.icon}
                 <span className="hidden xl:inline">{opt.label}</span>
@@ -179,7 +186,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
         >
           <span className="px-1.5 text-[11px] text-slate-400 hidden lg:inline-flex items-center gap-1">
             <Layers className="w-3 h-3 text-cyan-500" />
-            展開
+            {t.expand}
           </span>
           {([1, 2, 3, 'all'] as const).map((lv) => {
             const active = expandPreset === lv;
@@ -196,14 +203,14 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {lv === 'all' ? '全展開' : `${lv}層`}
+                {lv === 'all' ? t.expandAll : t.expandLevel(lv)}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Right: Templates, Export, Shortcuts, Theme, Toggle Outliner */}
+      {/* Right: Templates, Export, Language Switch, Shortcuts, Theme, Toggle Outliner */}
       <div className="flex items-center gap-1.5">
         {/* Templates Dropdown */}
         <div className="relative">
@@ -220,7 +227,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             }`}
           >
             <BookTemplate className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">範本</span>
+            <span className="hidden sm:inline">{t.templates}</span>
             <ChevronDown className="w-3 h-3 opacity-60" />
           </button>
 
@@ -232,7 +239,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               onMouseLeave={() => setShowTemplates(false)}
             >
               <div className="px-2.5 py-1.5 text-[11px] font-bold text-slate-400">
-                快速套用精選範本（將建立新分頁）
+                {t.templatesTitle}
               </div>
               <div className="space-y-1">
                 {MINDMAP_TEMPLATES.map((tpl) => (
@@ -269,13 +276,13 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">匯出</span>
+            <span className="hidden sm:inline">{t.export}</span>
             <ChevronDown className="w-3 h-3 opacity-80" />
           </button>
 
           {showExport && (
             <div
-              className={`absolute right-0 top-full mt-2 w-56 rounded-2xl border shadow-2xl py-1.5 z-50 text-xs animate-fade-in ${
+              className={`absolute right-0 top-full mt-2 w-60 rounded-2xl border shadow-2xl py-1.5 z-50 text-xs animate-fade-in ${
                 isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'
               }`}
               onMouseLeave={() => setShowExport(false)}
@@ -291,7 +298,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <ImageIcon className="w-4 h-4 text-cyan-400" />
-                <span>匯出 PNG 高清圖片 (2x)</span>
+                <span>{t.exportPng}</span>
               </button>
 
               <button
@@ -305,7 +312,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <ImageIcon className="w-4 h-4 text-indigo-400" />
-                <span>匯出 SVG 向量圖檔</span>
+                <span>{t.exportSvg}</span>
               </button>
 
               <div className={`h-px my-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
@@ -321,7 +328,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <span>匯出 Markdown (.md)</span>
+                <span>{t.exportMarkdown}</span>
               </button>
 
               <button
@@ -335,7 +342,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <FileCode2 className="w-4 h-4 text-purple-400" />
-                <span>匯出 Mermaid 語法 (.mmd)</span>
+                <span>{t.exportMermaid}</span>
               </button>
 
               <button
@@ -349,7 +356,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <FileText className="w-4 h-4 text-amber-400" />
-                <span>匯出純文字大綱 (.txt)</span>
+                <span>{t.exportTxt}</span>
               </button>
 
               <div className={`h-px my-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
@@ -365,7 +372,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <FileJson className="w-4 h-4 text-blue-400" />
-                <span>備份整個工作區 (.json)</span>
+                <span>{t.exportJson}</span>
               </button>
 
               <label
@@ -374,7 +381,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
                 }`}
               >
                 <Upload className="w-4 h-4 text-rose-400" />
-                <span>還原工作區備份 (.json)</span>
+                <span>{t.importJson}</span>
                 <input
                   type="file"
                   accept=".json"
@@ -389,6 +396,21 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           )}
         </div>
 
+        {/* Language Switch Button */}
+        <button
+          type="button"
+          onClick={onToggleLanguage}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all hover:scale-[1.03] active:scale-95 ${
+            isDark
+              ? 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
+              : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+          }`}
+          title={t.langToggle}
+        >
+          <Languages className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="font-mono font-bold">{language === 'zh' ? 'EN' : '中'}</span>
+        </button>
+
         {/* Shortcuts Button */}
         <button
           type="button"
@@ -398,7 +420,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               ? 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-300'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
           }`}
-          title="鍵盤快捷鍵與語法指南"
+          title={t.shortcutsTooltip}
         >
           <Keyboard className="w-4 h-4" />
         </button>
@@ -412,7 +434,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               ? 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-amber-300'
               : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-indigo-600'
           }`}
-          title={isDark ? '切換為淺色主題' : '切換為深色主題'}
+          title={isDark ? t.themeLight : t.themeDark}
         >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
@@ -430,16 +452,17 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               ? 'bg-slate-800 border-slate-700 text-slate-300'
               : 'bg-slate-100 border-slate-200 text-slate-700'
           }`}
-          title={isRightPanelOpen ? '隱藏右側大綱編輯器 (全螢幕心智圖)' : '展開右側大綱編輯器'}
+          title={isRightPanelOpen ? t.hideOutlinerTooltip : t.openOutlinerTooltip}
         >
           {isRightPanelOpen ? (
             <PanelRightClose className="w-4 h-4" />
           ) : (
             <PanelRightOpen className="w-4 h-4" />
           )}
-          <span className="hidden lg:inline">{isRightPanelOpen ? '收合打字區' : '開啟打字區'}</span>
+          <span className="hidden lg:inline">{isRightPanelOpen ? t.hideOutliner : t.openOutliner}</span>
         </button>
       </div>
     </header>
   );
 };
+

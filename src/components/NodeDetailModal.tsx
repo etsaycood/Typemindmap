@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { NodeColorKey, OutlineNode, ThemeMode } from '../types/mindmap';
+import { LanguageMode, NodeColorKey, OutlineNode, ThemeMode } from '../types/mindmap';
+import { I18N } from '../utils/i18n';
 import { COLOR_PALETTES } from '../utils/layoutEngine';
 import { ParsedLineAttrs } from '../utils/outlineEngine';
 import { X, Check, Link2, Tag, StickyNote, Palette, CheckSquare } from 'lucide-react';
@@ -7,6 +8,7 @@ import { X, Check, Link2, Tag, StickyNote, Palette, CheckSquare } from 'lucide-r
 interface NodeDetailModalProps {
   node: OutlineNode | null;
   theme: ThemeMode;
+  language: LanguageMode;
   onClose: () => void;
   onSave: (node: OutlineNode, patch: Partial<ParsedLineAttrs>) => void;
 }
@@ -14,6 +16,7 @@ interface NodeDetailModalProps {
 export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
   node,
   theme,
+  language,
   onClose,
   onSave
 }) => {
@@ -40,6 +43,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
   if (!node) return null;
 
   const isDark = theme === 'dark';
+  const t = I18N[language];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +79,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
         }`}
       >
         <div className="flex items-center justify-between border-b pb-3 border-slate-700/40">
-          <h3 className="text-sm font-bold">編輯節點詳細資訊（自動同步至右側大綱）</h3>
+          <h3 className="text-sm font-bold">{t.detailModalTitle}</h3>
           <button
             type="button"
             onClick={onClose}
@@ -87,7 +91,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
 
         {/* Title */}
         <div>
-          <label className="block text-xs font-semibold mb-1 text-slate-400">節點標題文字</label>
+          <label className="block text-xs font-semibold mb-1 text-slate-400">{t.nodeTextLabel}</label>
           <input
             type="text"
             value={text}
@@ -103,13 +107,13 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold mb-1 text-slate-400">
             <StickyNote className="w-3.5 h-3.5 text-amber-400" />
-            <span>補充備註（對應大綱語法 `// 備註`）</span>
+            <span>{t.noteLabel}</span>
           </label>
           <input
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="例如：預計下週三前完成驗證..."
+            placeholder={t.notePlaceholder}
             className={`w-full rounded-xl border px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 ${
               isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
             }`}
@@ -121,13 +125,13 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold mb-1 text-slate-400">
               <Tag className="w-3.5 h-3.5 text-cyan-400" />
-              <span>標籤（以空白或逗號分隔）</span>
+              <span>{t.tagsLabel}</span>
             </label>
             <input
               type="text"
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="重要, 進行中"
+              placeholder={t.tagsPlaceholder}
               className={`w-full rounded-xl border px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 ${
                 isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
               }`}
@@ -137,7 +141,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold mb-1 text-slate-400">
               <Link2 className="w-3.5 h-3.5 text-blue-400" />
-              <span>附加超連結網址</span>
+              <span>{t.urlLabel}</span>
             </label>
             <input
               type="url"
@@ -155,13 +159,13 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 text-slate-400">
             <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span>待辦核取狀態</span>
+            <span>{t.checkStatusLabel}</span>
           </label>
           <div className="flex items-center gap-2 text-xs">
             {[
-              { id: 'none', label: '無核取框' },
-              { id: 'unchecked', label: '[ ] 未完成' },
-              { id: 'checked', label: '[x] 已完成' }
+              { id: 'none', label: t.checkNone },
+              { id: 'unchecked', label: t.checkUnchecked },
+              { id: 'checked', label: t.checkChecked }
             ].map((opt) => (
               <button
                 key={opt.id}
@@ -185,7 +189,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
         <div>
           <label className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 text-slate-400">
             <Palette className="w-3.5 h-3.5 text-purple-400" />
-            <span>節點與子分支色彩</span>
+            <span>{t.nodeColorLabel}</span>
           </label>
           <div className="flex items-center gap-2 flex-wrap">
             <button
@@ -197,7 +201,7 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
                   : 'border-slate-700 text-slate-400'
               }`}
             >
-              自動配色
+              {t.autoColor}
             </button>
             {COLOR_PALETTES.map((p) => (
               <button
@@ -222,17 +226,18 @@ export const NodeDetailModal: React.FC<NodeDetailModalProps> = ({
             onClick={onClose}
             className="px-3.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white"
           >
-            取消
+            {t.btnCancel}
           </button>
           <button
             type="submit"
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md"
           >
             <Check className="w-3.5 h-3.5" />
-            <span>儲存變更</span>
+            <span>{t.btnSave}</span>
           </button>
         </div>
       </form>
     </div>
   );
 };
+

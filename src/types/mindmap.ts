@@ -2,6 +2,8 @@ export type LayoutMode = 'right' | 'balanced' | 'left' | 'top-down';
 
 export type ThemeMode = 'dark' | 'light';
 
+export type LanguageMode = 'zh' | 'en';
+
 export type NodeColorKey =
   | 'auto'
   | 'indigo'
@@ -43,3 +45,4 @@ export interface HistoryEntry {
   content: string;
   cursorLine?: number;
 }
+
