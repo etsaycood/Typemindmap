@@ -920,7 +920,9 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
               }}
               className={`absolute rounded-xl border transition-all duration-150 group/card cursor-pointer shadow-md flex flex-col justify-center ${
                 isRoot
-                  ? 'bg-gradient-to-br from-indigo-950 via-slate-900 to-cyan-950 border-cyan-400/70 text-white px-4 py-2.5 shadow-cyan-500/15'
+                  ? isDark
+                    ? 'bg-gradient-to-br from-indigo-950 via-slate-900 to-cyan-950 border-cyan-400/70 text-white px-4 py-2.5 shadow-cyan-500/15'
+                    : 'bg-gradient-to-br from-indigo-600 via-indigo-600 to-blue-600 border border-indigo-400 text-white px-4 py-2.5 shadow-indigo-500/25'
                   : isDark
                   ? `${palette.darkBg} ${palette.darkBorder} text-slate-100 px-3.5 py-2`
                   : `${palette.lightBg} ${palette.lightBorder} text-slate-800 px-3.5 py-2 shadow-sm`

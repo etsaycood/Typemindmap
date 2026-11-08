@@ -353,3 +353,4 @@ export async function fetchSharedPayload(shareParam: string): Promise<{
     throw new Error(`雲端檔案內容不是有效的心智圖格式 (${err.message || ''})`);
   }
 }
+
