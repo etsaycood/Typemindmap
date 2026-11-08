@@ -32,6 +32,9 @@ import { MindMapCanvas } from './components/MindMapCanvas';
 import { RightOutliner } from './components/RightOutliner';
 import { NodeDetailModal } from './components/NodeDetailModal';
 import { ShortcutsModal } from './components/ShortcutsModal';
+import { ShareModal } from './components/ShareModal';
+import { fetchSharedPayload } from './utils/cloudShare';
+import { Loader2, CheckCircle2, AlertCircle, ExternalLink, X } from 'lucide-react';
 
 const STORAGE_KEY = 'typemindmap_workspace_v1';
 
@@ -199,9 +202,110 @@ export default function App() {
     return computeMindMapLayout(rootNode, expandedIds, activeTab.layoutMode);
   }, [rootNode, expandedIds, activeTab.layoutMode]);
 
-  // Modals
+  // Modals & Cloud Share
   const [detailModalNode, setDetailModalNode] = useState<OutlineNode | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+
+  // Cloud Share Status Notification Banner
+  const [sharedBanner, setSharedBanner] = useState<{
+    type: 'loading' | 'success' | 'error';
+    shareParam?: string;
+    providerName?: string;
+    tabTitle?: string;
+    workspaceCount?: number;
+    errorMessage?: string;
+    rawUrl?: string;
+    webViewUrl?: string;
+  } | null>(null);
+
+  // Clean URL ?s= parameter without reloading
+  const handleCleanUrlParam = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('s');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+    }
+    setSharedBanner(null);
+  }, []);
+
+  // Auto-load Cloud Shared MindMap when ?s=prefix_id is present in URL
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const shareParam = params.get('s');
+    if (!shareParam) return;
+
+    let cancelled = false;
+    setSharedBanner({
+      type: 'loading',
+      shareParam
+    });
+
+    fetchSharedPayload(shareParam)
+      .then(({ payload, meta }) => {
+        if (cancelled) return;
+
+        if (payload.shareMode === 'workspace' && Array.isArray(payload.tabs) && payload.tabs.length > 0) {
+          setTabs(payload.tabs);
+          setActiveTabId(payload.activeTabId || payload.tabs[0].id);
+          if (payload.theme) setTheme(payload.theme);
+          setSharedBanner({
+            type: 'success',
+            providerName: meta.providerName,
+            workspaceCount: payload.tabs.length,
+            rawUrl: meta.rawUrl,
+            webViewUrl: meta.webViewUrl
+          });
+        } else if (payload.tab) {
+          const sharedTab = payload.tab;
+          const newTabId = sharedTab.id || `tab_${Date.now()}`;
+          const newTab: DocumentTab = {
+            id: newTabId,
+            title: sharedTab.title || '雲端分享心智圖',
+            content: sharedTab.content,
+            layoutMode: sharedTab.layoutMode || 'right',
+            updatedAt: Date.now()
+          };
+
+          setTabs((prev) => {
+            const isOnlyDefaultTpl =
+              prev.length === 1 &&
+              prev[0].title === '產品規劃藍圖' &&
+              prev[0].content === MINDMAP_TEMPLATES[0].content;
+
+            if (isOnlyDefaultTpl) {
+              return [newTab];
+            }
+            const exists = prev.some((t) => t.id === newTab.id);
+            if (exists) {
+              newTab.id = `tab_${Date.now()}`;
+            }
+            return [...prev, newTab];
+          });
+
+          setActiveTabId(newTab.id);
+          setSharedBanner({
+            type: 'success',
+            providerName: meta.providerName,
+            tabTitle: sharedTab.title || '雲端分享心智圖',
+            rawUrl: meta.rawUrl,
+            webViewUrl: meta.webViewUrl
+          });
+        }
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setSharedBanner({
+          type: 'error',
+          errorMessage: err.message || String(err)
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const expandAncestorsOfLine = useCallback((tree: OutlineNode, lineIdx: number) => {
     const targetNode = findNodeByLineIndex(tree, lineIdx);
@@ -701,11 +805,84 @@ export default function App() {
         onExportTxt={handleExportTxt}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
+        onOpenShare={() => setIsShareModalOpen(true)}
         onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
         onToggleLanguage={() => setLanguage((prev) => (prev === 'zh' ? 'en' : 'zh'))}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onToggleRightPanel={() => setIsRightPanelOpen((v) => !v)}
       />
+
+      {/* Cloud Share Status Notification Banner */}
+      {sharedBanner && (
+        <div
+          className={`w-full px-4 py-2 border-b flex items-center justify-between gap-3 text-xs z-30 transition-all animate-fade-in ${
+            sharedBanner.type === 'loading'
+              ? theme === 'dark'
+                ? 'bg-cyan-950/70 border-cyan-800 text-cyan-200'
+                : 'bg-cyan-50 border-cyan-200 text-cyan-900'
+              : sharedBanner.type === 'success'
+              ? theme === 'dark'
+                ? 'bg-emerald-950/70 border-emerald-800/80 text-emerald-200'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : theme === 'dark'
+              ? 'bg-rose-950/70 border-rose-800 text-rose-200'
+              : 'bg-rose-50 border-rose-200 text-rose-900'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            {sharedBanner.type === 'loading' && <Loader2 className="w-4 h-4 animate-spin shrink-0 text-cyan-400" />}
+            {sharedBanner.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />}
+            {sharedBanner.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />}
+            <span className="truncate font-medium">
+              {sharedBanner.type === 'loading' && `${I18N[language].loadingSharedTitle} (?s=${sharedBanner.shareParam || ''})`}
+              {sharedBanner.type === 'success' && (
+                sharedBanner.workspaceCount
+                  ? I18N[language].loadedSharedWorkspaceSuccess(sharedBanner.providerName || '', sharedBanner.workspaceCount)
+                  : I18N[language].loadedSharedTabSuccess(sharedBanner.providerName || '', sharedBanner.tabTitle || '')
+              )}
+              {sharedBanner.type === 'error' && I18N[language].loadSharedFailed(sharedBanner.errorMessage || '')}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {sharedBanner.type === 'success' && (
+              <>
+                {sharedBanner.rawUrl && (
+                  <a
+                    href={sharedBanner.rawUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-[11px] opacity-80 hover:opacity-100 flex items-center gap-1"
+                  >
+                    <span>{I18N[language].shareViewRaw}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCleanUrlParam}
+                  className={`px-2 py-0.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+                    theme === 'dark'
+                      ? 'border-emerald-700 bg-emerald-900/40 hover:bg-emerald-800 text-emerald-200'
+                      : 'border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-800'
+                  }`}
+                  title={language === 'zh' ? '從網址移除 ?s= 避免重新整理時重複覆蓋' : 'Remove ?s= from URL to prevent reload overwrite'}
+                >
+                  {I18N[language].cleanUrlParam}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setSharedBanner(null)}
+              className="p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Split Workspace: Left MindMap Canvas + Right Keyboard Outliner */}
       <main ref={mainRef} className="flex-1 flex w-full min-h-0 relative overflow-hidden">
@@ -796,6 +973,16 @@ export default function App() {
         theme={theme}
         language={language}
         onClose={() => setShortcutsOpen(false)}
+      />
+
+      {/* Cloud Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        theme={theme}
+        language={language}
+        tabs={tabs}
+        activeTab={activeTab}
+        onClose={() => setIsShareModalOpen(false)}
       />
     </div>
   );

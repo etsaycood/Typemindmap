@@ -23,7 +23,8 @@ import {
   FileCode2,
   FileText,
   FileJson,
-  Languages
+  Languages,
+  Share2
 } from 'lucide-react';
 
 interface TopToolbarProps {
@@ -46,6 +47,7 @@ interface TopToolbarProps {
   onExportTxt: () => void;
   onExportJson: () => void;
   onImportJson: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onOpenShare: () => void;
   onToggleTheme: () => void;
   onToggleLanguage: () => void;
   onOpenShortcuts: () => void;
@@ -72,6 +74,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onExportTxt,
   onExportJson,
   onImportJson,
+  onOpenShare,
   onToggleTheme,
   onToggleLanguage,
   onOpenShortcuts,
@@ -265,6 +268,21 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           )}
         </div>
 
+        {/* Cloud Share Button */}
+        <button
+          type="button"
+          onClick={onOpenShare}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-sm transition-all hover:scale-[1.02] active:scale-95 ${
+            isDark
+              ? 'bg-gradient-to-r from-cyan-600/30 to-indigo-600/30 border-cyan-500/50 text-cyan-200 hover:border-cyan-400 hover:text-white'
+              : 'bg-gradient-to-r from-cyan-50 to-indigo-50 border-cyan-300 text-cyan-800 hover:border-cyan-400'
+          }`}
+          title={t.shareTooltip}
+        >
+          <Share2 className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="hidden sm:inline">{t.share}</span>
+        </button>
+
         {/* Export Dropdown */}
         <div className="relative">
           <button
@@ -287,6 +305,22 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               }`}
               onMouseLeave={() => setShowExport(false)}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenShare();
+                  setShowExport(false);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2 font-medium transition-colors ${
+                  isDark ? 'hover:bg-slate-800 text-cyan-300' : 'hover:bg-slate-100 text-cyan-700'
+                }`}
+              >
+                <Share2 className="w-4 h-4 text-cyan-400" />
+                <span>{t.shareTooltip}</span>
+              </button>
+
+              <div className={`h-px my-1 ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`} />
+
               <button
                 type="button"
                 onClick={() => {
