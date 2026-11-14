@@ -431,30 +431,30 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
 
       {/* 2. Quick Outliner Action Strip */}
       <div
-        className={`flex items-center justify-between px-3 py-1.5 border-b text-[11px] ${
+        className={`flex items-center justify-between px-3.5 py-2 sm:py-2.5 border-b min-h-[46px] select-none ${
           isDark
-            ? 'bg-slate-900/90 border-slate-800 text-slate-400'
-            : 'bg-slate-50 border-slate-200 text-slate-600'
+            ? 'bg-slate-900/95 border-slate-800 text-slate-400 shadow-sm'
+            : 'bg-slate-50/95 border-slate-200 text-slate-600 shadow-sm'
         }`}
       >
         {/* Left: Node Count */}
-        <span className="font-mono text-[10px] opacity-75 select-none pl-0.5">
+        <span className="font-mono text-[11px] opacity-75 select-none pl-1 font-medium">
           {t.nodesCount(rootNode.totalDescendants + 1)}
         </span>
 
         {/* Right: Functional Action Buttons */}
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-1.5 ml-auto">
           {/* Toggle Checkbox */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('checkbox')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-200 hover:text-emerald-700'
             }`}
             title="切換待辦方塊 [ ] / [x]"
           >
-            <CheckSquare className="w-3.5 h-3.5" />
+            <CheckSquare className="w-4 h-4" />
           </button>
 
           {/* Insert Tag */}
@@ -462,12 +462,12 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('tag')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
             }`}
             title="插入 #標籤"
           >
-            <Hash className="w-3.5 h-3.5" />
+            <Hash className="w-4 h-4" />
           </button>
 
           {/* Insert Note */}
@@ -475,27 +475,27 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('note')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-amber-300' : 'hover:bg-slate-200 hover:text-amber-700'
             }`}
             title="插入 // 備註說明"
           >
-            <StickyNote className="w-3.5 h-3.5" />
+            <StickyNote className="w-4 h-4" />
           </button>
 
-          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+          <div className={`h-4.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
 
           {/* Move Subtree Up */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleMoveBlock('up')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.moveUpTooltip}
           >
-            <ArrowUp className="w-3.5 h-3.5" />
+            <ArrowUp className="w-4 h-4" />
           </button>
 
           {/* Move Subtree Down */}
@@ -503,27 +503,27 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleMoveBlock('down')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.moveDownTooltip}
           >
-            <ArrowDown className="w-3.5 h-3.5" />
+            <ArrowDown className="w-4 h-4" />
           </button>
 
-          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+          <div className={`h-4.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
 
           {/* >| Tab (Indent) */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => adjustIndentation(false)}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
             }`}
             title={t.indentTooltip}
           >
-            <ArrowRightToLine className="w-3.5 h-3.5" />
+            <ArrowRightToLine className="w-4 h-4" />
           </button>
 
           {/* |< Shift+Tab (Outdent) */}
@@ -531,12 +531,12 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => adjustIndentation(true)}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
             }`}
             title={t.outdentTooltip}
           >
-            <ArrowLeftToLine className="w-3.5 h-3.5" />
+            <ArrowLeftToLine className="w-4 h-4" />
           </button>
 
           {/* < Backspace / Delete */}
@@ -544,12 +544,12 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleBackspace}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-rose-400' : 'hover:bg-slate-200 hover:text-rose-600'
             }`}
             title={t.backspaceTooltip}
           >
-            <Delete className="w-3.5 h-3.5" />
+            <Delete className="w-4 h-4" />
           </button>
 
           {/* ↵ Enter / 換行 */}
@@ -557,12 +557,12 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleEnter}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+            className={`p-2 rounded-xl active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600'
             }`}
             title={t.enterTooltip}
           >
-            <CornerDownLeft className="w-3.5 h-3.5" />
+            <CornerDownLeft className="w-4 h-4" />
           </button>
         </div>
       </div>
