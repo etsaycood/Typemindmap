@@ -95,6 +95,19 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   const panStartRef = useRef({ clientX: 0, clientY: 0, panX: 0, panY: 0 });
   const didPanMoveRef = useRef(false);
 
+  // Sync latest pan/zoom to refs for touch event listeners
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Touch & Multi-Touch Gestures for Tablets / Mobile Screens
+  const touchPanStartRef = useRef({ clientX: 0, clientY: 0, panX: 0, panY: 0 });
+  const touchPinchStartRef = useRef({ dist: 0, zoom: 1, wx: 0, wy: 0 });
+  const isTouchPanningRef = useRef(false);
+  const isTouchPinchingRef = useRef(false);
+  const didTouchMoveRef = useRef(false);
+
   // Inline Editing Draft Text & Guards
   const [inlineDraft, setInlineDraft] = useState<string>('');
   const committedEditRef = useRef<boolean>(false);
@@ -377,7 +390,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
     });
   };
 
-  // Canvas Background Panning
+  // Canvas Background Panning (Mouse)
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     // Middle mouse click re-centers view (just like txt2map.com!)
     if (e.button === 1) {
@@ -385,7 +398,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       fitToView(true);
       return;
     }
-    if ((e.target as HTMLElement).closest('[data-mind-node], button, input')) {
+    if ((e.target as HTMLElement).closest('[data-mind-node], button, input, [data-mind-node="toolbar"]')) {
       return;
     }
     setIsPanning(true);
@@ -400,7 +413,7 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
   };
 
   useEffect(() => {
-    if (!isPanning) return;
+    if (!isPanning || isTouchPanningRef.current || isTouchPinchingRef.current) return;
     const onMove = (e: MouseEvent) => {
       const dx = e.clientX - panStartRef.current.clientX;
       const dy = e.clientY - panStartRef.current.clientY;
@@ -412,7 +425,14 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
         y: panStartRef.current.panY + dy
       });
     };
-    const onUp = () => setIsPanning(false);
+    const onUp = () => {
+      setIsPanning(false);
+      if (didPanMoveRef.current) {
+        window.setTimeout(() => {
+          didPanMoveRef.current = false;
+        }, 80);
+      }
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
     return () => {
@@ -420,6 +440,141 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       window.removeEventListener('mouseup', onUp);
     };
   }, [isPanning]);
+
+  // Touch & Multi-Touch Gestures (iPad / Tablets / Mobile Touchscreens)
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      // Do not intercept interactive buttons, inputs, links, or tool capsule
+      if (target.closest('button, input, textarea, a, select, [data-mind-node="toolbar"]')) {
+        return;
+      }
+
+      setSmoothAnim(false);
+
+      if (e.touches.length === 1) {
+        // Single finger pan
+        isTouchPinchingRef.current = false;
+        isTouchPanningRef.current = true;
+        didTouchMoveRef.current = false;
+        setIsPanning(true);
+
+        touchPanStartRef.current = {
+          clientX: e.touches[0].clientX,
+          clientY: e.touches[0].clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y
+        };
+      } else if (e.touches.length >= 2) {
+        // Two finger pinch-to-zoom & pan
+        isTouchPanningRef.current = false;
+        isTouchPinchingRef.current = true;
+        didTouchMoveRef.current = true;
+        setIsPanning(true);
+
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+
+        const rect = vp.getBoundingClientRect();
+        const vx = midX - rect.left;
+        const vy = midY - rect.top;
+
+        const curZoom = zoomRef.current;
+        const curPan = panRef.current;
+        const wx = (vx - curPan.x) / curZoom;
+        const wy = (vy - curPan.y) / curZoom;
+
+        touchPinchStartRef.current = {
+          dist: Math.max(10, dist),
+          zoom: curZoom,
+          wx,
+          wy
+        };
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (isTouchPinchingRef.current && e.touches.length >= 2) {
+        e.preventDefault(); // Prevent browser pinch-zoom on webpage
+
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+
+        const rect = vp.getBoundingClientRect();
+        const vx = midX - rect.left;
+        const vy = midY - rect.top;
+
+        const pinch = touchPinchStartRef.current;
+        const scale = dist / pinch.dist;
+        const nextZoom = Math.min(2.5, Math.max(0.22, pinch.zoom * scale));
+
+        const nextPanX = vx - pinch.wx * nextZoom;
+        const nextPanY = vy - pinch.wy * nextZoom;
+
+        setZoom(nextZoom);
+        setPan({ x: nextPanX, y: nextPanY });
+      } else if (isTouchPanningRef.current && e.touches.length === 1) {
+        const t0 = e.touches[0];
+        const dx = t0.clientX - touchPanStartRef.current.clientX;
+        const dy = t0.clientY - touchPanStartRef.current.clientY;
+
+        if (Math.hypot(dx, dy) > 4) {
+          didTouchMoveRef.current = true;
+          e.preventDefault(); // Prevent browser elastic scroll / pull-to-refresh
+        }
+
+        setPan({
+          x: touchPanStartRef.current.panX + dx,
+          y: touchPanStartRef.current.panY + dy
+        });
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) {
+        isTouchPanningRef.current = false;
+        isTouchPinchingRef.current = false;
+        setIsPanning(false);
+
+        if (didTouchMoveRef.current) {
+          window.setTimeout(() => {
+            didTouchMoveRef.current = false;
+          }, 80);
+        }
+      } else if (e.touches.length === 1) {
+        // Transition smoothly from 2 fingers back to 1 finger
+        isTouchPinchingRef.current = false;
+        isTouchPanningRef.current = true;
+        touchPanStartRef.current = {
+          clientX: e.touches[0].clientX,
+          clientY: e.touches[0].clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y
+        };
+      }
+    };
+
+    vp.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      vp.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
 
   const finishInlineEdit = (
     node: OutlineNode,
@@ -463,16 +618,18 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
       onClick={(e) => {
         if (
           !didPanMoveRef.current &&
-          !(e.target as HTMLElement).closest('[data-mind-node], button, input')
+          !didTouchMoveRef.current &&
+          !(e.target as HTMLElement).closest('[data-mind-node], button, input, [data-mind-node="toolbar"]')
         ) {
           setColorPopoverOpen(false);
           onSelectNode(null);
         }
       }}
-      className={`relative w-full h-full overflow-hidden select-none ${
+      className={`relative w-full h-full overflow-hidden select-none touch-none ${
         isPanning ? 'cursor-grabbing' : 'cursor-grab'
       } ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}
       style={{
+        touchAction: 'none',
         backgroundImage: isDark
           ? 'radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.14) 1px, transparent 0)'
           : 'radial-gradient(circle at 1px 1px, rgba(100, 116, 139, 0.18) 1px, transparent 0)',
@@ -902,11 +1059,13 @@ export const MindMapCanvas: React.FC<MindMapCanvasProps> = ({
                 setDropTarget(null);
               }}
               onClick={(e) => {
+                if (didTouchMoveRef.current || didPanMoveRef.current) return;
                 e.stopPropagation();
                 setColorPopoverOpen(false);
                 onSelectNode(node);
               }}
               onDoubleClick={(e) => {
+                if (didTouchMoveRef.current || didPanMoveRef.current) return;
                 e.stopPropagation();
                 setColorPopoverOpen(false);
                 setInlineDraft(node.text);

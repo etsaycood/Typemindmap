@@ -692,7 +692,7 @@ export default function App() {
     );
   };
 
-  // Split Resizer between Left Canvas and Right Outliner
+  // Split Resizer between Left Canvas and Right Outliner (Mouse & Touch)
   const mainRef = useRef<HTMLElement>(null);
   const startResizeSplit = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -711,6 +711,28 @@ export default function App() {
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+  };
+
+  const startResizeSplitTouch = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    const startX = e.touches[0].clientX;
+    const startRightPct = rightWidthPercent;
+    const totalW = mainRef.current?.clientWidth || 1200;
+
+    const onTouchMove = (ev: TouchEvent) => {
+      if (ev.touches.length !== 1) return;
+      const dx = startX - ev.touches[0].clientX;
+      const deltaPct = (dx / totalW) * 100;
+      setRightWidthPercent(Math.min(60, Math.max(22, startRightPct + deltaPct)));
+    };
+    const onTouchEnd = () => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
   };
 
   // Export / Import Handlers
@@ -923,7 +945,8 @@ export default function App() {
           <>
             <div
               onMouseDown={startResizeSplit}
-              className={`w-2 h-full cursor-col-resize flex items-center justify-center z-30 transition-colors group ${
+              onTouchStart={startResizeSplitTouch}
+              className={`w-3 sm:w-2 h-full cursor-col-resize touch-none flex items-center justify-center z-30 transition-colors group select-none ${
                 theme === 'dark'
                   ? 'bg-slate-900 hover:bg-cyan-500/30'
                   : 'bg-slate-200 hover:bg-cyan-500/30'
