@@ -8,6 +8,7 @@ import {
   ArrowRightToLine,
   ArrowLeftToLine,
   Delete,
+  CornerDownLeft,
   CheckSquare,
   Hash,
   StickyNote,
@@ -221,6 +222,40 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
     });
   };
 
+  // Enter / 換行 button handler (auto-preserve indent & keep cursor line in upper portion)
+  const handleEnter = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const val = el.value.replace(/\r\n/g, '\n');
+    const selStart = el.selectionStart;
+    const selEnd = el.selectionEnd;
+
+    const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+    const curLineBeforeCursor = val.slice(lineStart, selStart);
+    const indentMatch = curLineBeforeCursor.match(/^[ \t]*/);
+    const indent = (indentMatch ? indentMatch[0] : '').replace(/\t/g, '  ');
+
+    // If current line is line 0 (root) and has 0 indent, indent the second line by 2 spaces automatically!
+    const curLineIdx = computeLineIndexFromPos(val, selStart);
+    const nextIndent = curLineIdx === 0 && indent.length === 0 ? '  ' : indent;
+    const nextLineIdx = curLineIdx + 1;
+
+    const nextVal = val.slice(0, selStart) + '\n' + nextIndent + val.slice(selEnd);
+    const nextCursor = selStart + 1 + nextIndent.length;
+
+    onChangeContent(nextVal, nextLineIdx);
+    onActiveLineChange(nextLineIdx);
+
+    window.requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.selectionStart = nextCursor;
+      textareaRef.current.selectionEnd = nextCursor;
+      scrollLineToUpperPortion(nextLineIdx, true);
+    });
+  };
+
   // Move current line + subtree up/down
   const handleMoveBlock = (dir: 'up' | 'down') => {
     const res = moveSubtreeVertical(content, rootNode, activeLineIndex, dir);
@@ -293,34 +328,8 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
 
     // 3. Enter -> Auto-preserve current line indentation & keep typing line in upper portion
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      const el = e.currentTarget;
-      const val = el.value;
-      const selStart = el.selectionStart;
-      const selEnd = el.selectionEnd;
-
-      const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
-      const curLineBeforeCursor = val.slice(lineStart, selStart);
-      const indentMatch = curLineBeforeCursor.match(/^[ \t]*/);
-      const indent = (indentMatch ? indentMatch[0] : '').replace(/\t/g, '  ');
-
-      // If current line is line 0 (root) and has 0 indent, indent the second line by 2 spaces automatically!
-      const curLineIdx = computeLineIndexFromPos(val, selStart);
-      const nextIndent = curLineIdx === 0 && indent.length === 0 ? '  ' : indent;
-      const nextLineIdx = curLineIdx + 1;
-
       e.preventDefault();
-      const nextVal = val.slice(0, selStart) + '\n' + nextIndent + val.slice(selEnd);
-      const nextCursor = selStart + 1 + nextIndent.length;
-
-      onChangeContent(nextVal, nextLineIdx);
-      onActiveLineChange(nextLineIdx);
-
-      window.requestAnimationFrame(() => {
-        if (!textareaRef.current) return;
-        textareaRef.current.selectionStart = nextCursor;
-        textareaRef.current.selectionEnd = nextCursor;
-        scrollLineToUpperPortion(nextLineIdx, true);
-      });
+      handleEnter();
       return;
     }
   };
@@ -428,76 +437,13 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             : 'bg-slate-50 border-slate-200 text-slate-600'
         }`}
       >
-        <div className="flex items-center gap-1">
-          {/* Tab (Indent) */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => adjustIndentation(false)}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
-              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
-            }`}
-            title={t.indentTooltip}
-          >
-            <ArrowRightToLine className="w-3.5 h-3.5" />
-          </button>
+        {/* Left: Node Count */}
+        <span className="font-mono text-[10px] opacity-75 select-none pl-0.5">
+          {t.nodesCount(rootNode.totalDescendants + 1)}
+        </span>
 
-          {/* Shift+Tab (Outdent) */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => adjustIndentation(true)}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
-              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
-            }`}
-            title={t.outdentTooltip}
-          >
-            <ArrowLeftToLine className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Backspace / Delete (<-) */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={handleBackspace}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
-              isDark ? 'hover:bg-slate-800 hover:text-rose-400' : 'hover:bg-slate-200 hover:text-rose-600'
-            }`}
-            title={t.backspaceTooltip}
-          >
-            <Delete className="w-3.5 h-3.5" />
-          </button>
-
-          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
-
-          {/* Move Subtree Up */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleMoveBlock('up')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
-              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
-            }`}
-            title={t.moveUpTooltip}
-          >
-            <ArrowUp className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Move Subtree Down */}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => handleMoveBlock('down')}
-            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
-              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
-            }`}
-            title={t.moveDownTooltip}
-          >
-            <ArrowDown className="w-3.5 h-3.5" />
-          </button>
-
-          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
-
+        {/* Right: Functional Action Buttons */}
+        <div className="flex items-center gap-1 ml-auto">
           {/* Toggle Checkbox */}
           <button
             type="button"
@@ -536,11 +482,89 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
           >
             <StickyNote className="w-3.5 h-3.5" />
           </button>
-        </div>
 
-        <span className="font-mono text-[10px] opacity-75">
-          {t.nodesCount(rootNode.totalDescendants + 1)}
-        </span>
+          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+
+          {/* Move Subtree Up */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleMoveBlock('up')}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
+            }`}
+            title={t.moveUpTooltip}
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Move Subtree Down */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => handleMoveBlock('down')}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
+            }`}
+            title={t.moveDownTooltip}
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+
+          <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+
+          {/* >| Tab (Indent) */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => adjustIndentation(false)}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
+            }`}
+            title={t.indentTooltip}
+          >
+            <ArrowRightToLine className="w-3.5 h-3.5" />
+          </button>
+
+          {/* |< Shift+Tab (Outdent) */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => adjustIndentation(true)}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
+            }`}
+            title={t.outdentTooltip}
+          >
+            <ArrowLeftToLine className="w-3.5 h-3.5" />
+          </button>
+
+          {/* < Backspace / Delete */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleBackspace}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-rose-400' : 'hover:bg-slate-200 hover:text-rose-600'
+            }`}
+            title={t.backspaceTooltip}
+          >
+            <Delete className="w-3.5 h-3.5" />
+          </button>
+
+          {/* ↵ Enter / 換行 */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleEnter}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-emerald-400' : 'hover:bg-slate-200 hover:text-emerald-600'
+            }`}
+            title={t.enterTooltip}
+          >
+            <CornerDownLeft className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* 3. Main Outliner Code Editor with Line Gutter */}
