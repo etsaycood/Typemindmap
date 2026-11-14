@@ -56,6 +56,9 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
   const t = I18N[language];
   const lines = content.replace(/\r\n/g, '\n').split('\n');
 
+  const LINE_HEIGHT = 24;
+  const PADDING_TOP = 12;
+
   // Sync scroll between gutter and textarea
   const handleScroll = () => {
     if (textareaRef.current && gutterRef.current) {
@@ -63,13 +66,47 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
     }
   };
 
-  // Jump cursor to line when user selects/focuses a node on the MindMap canvas (without stealing focus unless requested)
+  // Scroll active line so it sits comfortably in the upper portion (~30% from top)
+  const scrollLineToUpperPortion = (lineIdx: number, smooth: boolean = true) => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const lineY = PADDING_TOP + lineIdx * LINE_HEIGHT;
+    const clientH = el.clientHeight || 500;
+    const targetOffset = Math.round(clientH * 0.30);
+    const targetScrollTop = Math.max(0, lineY - targetOffset);
+
+    if (Math.abs(el.scrollTop - targetScrollTop) > 6) {
+      if (smooth) {
+        el.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      } else {
+        el.scrollTop = targetScrollTop;
+      }
+    }
+  };
+
+  // When typing, ensure line doesn't sink past the upper zone (~38% of visible height)
+  const ensureLineInUpperPortion = (lineIdx: number) => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const lineY = PADDING_TOP + lineIdx * LINE_HEIGHT;
+    const clientH = el.clientHeight || 500;
+    const relativeY = lineY - el.scrollTop;
+
+    // If the line sinks past 38% of visible height or is scrolled out above:
+    if (relativeY > clientH * 0.38 || relativeY < 0) {
+      const targetOffset = Math.round(clientH * 0.30);
+      const targetScrollTop = Math.max(0, lineY - targetOffset);
+      el.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+    }
+  };
+
+  // Jump cursor to line when user selects/focuses a node on the MindMap canvas
   useEffect(() => {
     if (!externalJumpLine || !textareaRef.current) return;
     const targetLine = Math.max(0, Math.min(lines.length - 1, externalJumpLine.lineIndex));
-    const lineHeight = 24;
-    const desiredScroll = Math.max(0, targetLine * lineHeight - 120);
-    textareaRef.current.scrollTo({ top: desiredScroll, behavior: 'smooth' });
+    scrollLineToUpperPortion(targetLine, true);
   }, [externalJumpLine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const computeLineIndexFromPos = (text: string, pos: number): number => {
@@ -82,6 +119,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
     if (!el) return;
     const idx = computeLineIndexFromPos(el.value, el.selectionStart);
     onActiveLineChange(idx);
+    ensureLineInUpperPortion(idx);
   };
 
   // Indent or outdent selected lines
@@ -129,6 +167,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
         Math.max(0, selStart + firstDelta),
         Math.max(0, selEnd + totalDelta)
       );
+      ensureLineInUpperPortion(startLine);
     });
   };
 
@@ -150,6 +189,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
       const lineLen = newLines[res.newLineIndex]?.length || 0;
       el.focus();
       el.setSelectionRange(charOffset + lineLen, charOffset + lineLen);
+      scrollLineToUpperPortion(res.newLineIndex, true);
     });
   };
 
@@ -180,7 +220,10 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
 
     const next = curLines.join('\n');
     onChangeContent(next, idx);
-    window.requestAnimationFrame(() => el?.focus());
+    window.requestAnimationFrame(() => {
+      el?.focus();
+      ensureLineInUpperPortion(idx);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,7 +241,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
       return;
     }
 
-    // 3. Enter -> Auto-preserve current line indentation
+    // 3. Enter -> Auto-preserve current line indentation & keep typing line in upper portion
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const el = e.currentTarget;
       const val = el.value;
@@ -213,19 +256,22 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
       // If current line is line 0 (root) and has 0 indent, indent the second line by 2 spaces automatically!
       const curLineIdx = computeLineIndexFromPos(val, selStart);
       const nextIndent = curLineIdx === 0 && indent.length === 0 ? '  ' : indent;
+      const nextLineIdx = curLineIdx + 1;
 
       e.preventDefault();
       const nextVal = val.slice(0, selStart) + '\n' + nextIndent + val.slice(selEnd);
       const nextCursor = selStart + 1 + nextIndent.length;
 
-      onChangeContent(nextVal, curLineIdx + 1);
-      onActiveLineChange(curLineIdx + 1);
+      onChangeContent(nextVal, nextLineIdx);
+      onActiveLineChange(nextLineIdx);
 
       window.requestAnimationFrame(() => {
         if (!textareaRef.current) return;
         textareaRef.current.selectionStart = nextCursor;
         textareaRef.current.selectionEnd = nextCursor;
+        scrollLineToUpperPortion(nextLineIdx, true);
       });
+      return;
     }
   };
 
@@ -431,6 +477,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
               ? 'bg-slate-950/50 border-slate-800/80 text-slate-600'
               : 'bg-slate-50 border-slate-200 text-slate-400'
           }`}
+          style={{ paddingBottom: '50vh' }}
         >
           {lines.map((_, idx) => {
             const isCurrent = idx === activeLineIndex;
@@ -460,6 +507,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
             const lineIdx = computeLineIndexFromPos(val, e.target.selectionStart);
             onChangeContent(val, lineIdx);
             onActiveLineChange(lineIdx);
+            ensureLineInUpperPortion(lineIdx);
           }}
           onClick={updateCursorLine}
           onKeyUp={updateCursorLine}
@@ -474,6 +522,7 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
               : 'bg-white text-slate-800 placeholder-slate-400'
           }`}
           style={{
+            paddingBottom: '50vh',
             backgroundImage: isDark
               ? 'repeating-linear-gradient(to right, transparent 0, transparent 15px, rgba(148,163,184,0.08) 15px, rgba(148,163,184,0.08) 16px)'
               : 'repeating-linear-gradient(to right, transparent 0, transparent 15px, rgba(100,116,139,0.12) 15px, rgba(100,116,139,0.12) 16px)',
