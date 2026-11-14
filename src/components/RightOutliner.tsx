@@ -5,8 +5,9 @@ import { moveSubtreeVertical } from '../utils/outlineEngine';
 import {
   Plus,
   X,
-  IndentIncrease,
-  IndentDecrease,
+  ArrowRightToLine,
+  ArrowLeftToLine,
+  Delete,
   CheckSquare,
   Hash,
   StickyNote,
@@ -168,6 +169,55 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
         Math.max(0, selEnd + totalDelta)
       );
       ensureLineInUpperPortion(startLine);
+    });
+  };
+
+  // Backspace / Delete character or selection
+  const handleBackspace = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const val = el.value.replace(/\r\n/g, '\n');
+    const selStart = el.selectionStart;
+    const selEnd = el.selectionEnd;
+
+    let nextVal = val;
+    let nextCursor = selStart;
+
+    if (selStart !== selEnd) {
+      // 1. If text is selected, delete the entire selection
+      nextVal = val.slice(0, selStart) + val.slice(selEnd);
+      nextCursor = selStart;
+    } else if (selStart > 0) {
+      // 2. No selection: check line start and indentation
+      const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+      const curLineBeforeCursor = val.slice(lineStart, selStart);
+
+      // If at an indent (2 spaces) before cursor, outdent/delete 2 spaces
+      if (curLineBeforeCursor.endsWith('  ') && /^\s*$/.test(curLineBeforeCursor)) {
+        nextVal = val.slice(0, selStart - 2) + val.slice(selStart);
+        nextCursor = selStart - 2;
+      } else if (curLineBeforeCursor.endsWith('\t')) {
+        nextVal = val.slice(0, selStart - 1) + val.slice(selStart);
+        nextCursor = selStart - 1;
+      } else {
+        // Otherwise delete 1 character or newline
+        nextVal = val.slice(0, selStart - 1) + val.slice(selStart);
+        nextCursor = selStart - 1;
+      }
+    } else {
+      return;
+    }
+
+    const nextLineIdx = computeLineIndexFromPos(nextVal, nextCursor);
+    onChangeContent(nextVal, nextLineIdx);
+    onActiveLineChange(nextLineIdx);
+
+    window.requestAnimationFrame(() => {
+      if (!textareaRef.current) return;
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(nextCursor, nextCursor);
+      ensureLineInUpperPortion(nextLineIdx);
     });
   };
 
@@ -379,43 +429,66 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
         }`}
       >
         <div className="flex items-center gap-1">
+          {/* Tab (Indent) */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => adjustIndentation(false)}
-            className={`p-1 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.indentTooltip}
           >
-            <IndentIncrease className="w-3.5 h-3.5" />
+            <ArrowRightToLine className="w-3.5 h-3.5" />
           </button>
+
+          {/* Shift+Tab (Outdent) */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => adjustIndentation(true)}
-            className={`p-1 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.outdentTooltip}
           >
-            <IndentDecrease className="w-3.5 h-3.5" />
+            <ArrowLeftToLine className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Backspace / Delete (<-) */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleBackspace}
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+              isDark ? 'hover:bg-slate-800 hover:text-rose-400' : 'hover:bg-slate-200 hover:text-rose-600'
+            }`}
+            title={t.backspaceTooltip}
+          >
+            <Delete className="w-3.5 h-3.5" />
           </button>
 
           <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
 
+          {/* Move Subtree Up */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleMoveBlock('up')}
-            className={`p-1 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.moveUpTooltip}
           >
             <ArrowUp className="w-3.5 h-3.5" />
           </button>
+
+          {/* Move Subtree Down */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleMoveBlock('down')}
-            className={`p-1 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-white' : 'hover:bg-slate-200 hover:text-slate-900'
             }`}
             title={t.moveDownTooltip}
@@ -425,40 +498,43 @@ export const RightOutliner: React.FC<RightOutlinerProps> = ({
 
           <div className={`h-3.5 w-px mx-1 ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
 
+          {/* Toggle Checkbox */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('checkbox')}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-emerald-300' : 'hover:bg-slate-200 hover:text-emerald-700'
             }`}
             title="切換待辦方塊 [ ] / [x]"
           >
             <CheckSquare className="w-3.5 h-3.5" />
-            <span>{t.todoButton}</span>
           </button>
 
+          {/* Insert Tag */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('tag')}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-cyan-300' : 'hover:bg-slate-200 hover:text-cyan-700'
             }`}
             title="插入 #標籤"
           >
             <Hash className="w-3.5 h-3.5" />
-            <span>{t.tagButton}</span>
           </button>
 
+          {/* Insert Note */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => handleQuickSyntax('note')}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-lg transition-colors ${
+            className={`p-1.5 rounded-lg active:scale-90 transition-all ${
               isDark ? 'hover:bg-slate-800 hover:text-amber-300' : 'hover:bg-slate-200 hover:text-amber-700'
             }`}
             title="插入 // 備註說明"
           >
             <StickyNote className="w-3.5 h-3.5" />
-            <span>{t.noteButton}</span>
           </button>
         </div>
 
