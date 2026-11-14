@@ -110,7 +110,7 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           <div className="leading-tight">
             <span className="font-extrabold text-sm tracking-wide">Typemindmap</span>
             <span
-              className={`hidden lg:inline-block ml-2 text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
+              className={`hidden xl:inline-block ml-2 text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
                 isDark
                   ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60'
                   : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
@@ -181,41 +181,48 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           })}
         </div>
 
-        {/* Expand Depth Preset */}
+        {/* Expand Depth Preset (1, 2, 3, all) */}
         <div
           className={`flex items-center gap-0.5 p-0.5 rounded-xl border text-xs ${
             isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
           }`}
+          title={language === 'zh' ? '展開層級 (1, 2, 3, all)' : 'Expand levels (1, 2, 3, all)'}
         >
-          <span className="px-1.5 text-[11px] text-slate-400 hidden lg:inline-flex items-center gap-1">
-            <Layers className="w-3 h-3 text-cyan-500" />
-            {t.expand}
+          <span className="px-1 text-slate-400 inline-flex items-center" title={t.expand}>
+            <Layers className="w-3.5 h-3.5 text-cyan-500" />
           </span>
           {([1, 2, 3, 'all'] as const).map((lv) => {
             const active = expandPreset === lv;
+            const tooltipDesc =
+              lv === 'all'
+                ? t.expandAll
+                : language === 'zh'
+                ? `展開至第 ${lv} 層`
+                : `Expand to level ${lv}`;
             return (
               <button
                 key={String(lv)}
                 type="button"
                 onClick={() => onChangeExpandPreset(lv)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                className={`min-w-[22px] px-1.5 py-1 rounded-lg text-[11px] font-bold text-center transition-all ${
                   active
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : isDark
                     ? 'text-slate-400 hover:text-slate-200'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
+                title={tooltipDesc}
               >
-                {lv === 'all' ? t.expandAll : t.expandLevel(lv)}
+                {lv}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Right: Templates, Export, Language Switch, Shortcuts, Theme, Toggle Outliner */}
+      {/* Right: Templates, Cloud Share, Export, Language Switch, Shortcuts, Theme, Toggle Outliner */}
       <div className="flex items-center gap-1.5">
-        {/* Templates Dropdown */}
+        {/* Templates Dropdown (Icon Only) */}
         <div className="relative">
           <button
             type="button"
@@ -223,15 +230,15 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               setShowTemplates((v) => !v);
               setShowExport(false);
             }}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-xs font-medium transition-colors ${
               isDark
                 ? 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-200'
                 : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
             }`}
+            title={t.templatesTitle}
           >
-            <BookTemplate className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">{t.templates}</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
+            <BookTemplate className="w-4 h-4 text-amber-400" />
+            <ChevronDown className="w-2.5 h-2.5 opacity-60" />
           </button>
 
           {showTemplates && (
@@ -268,22 +275,21 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           )}
         </div>
 
-        {/* Cloud Share Button */}
+        {/* Cloud Share Button (Icon Only) */}
         <button
           type="button"
           onClick={onOpenShare}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold shadow-sm transition-all hover:scale-[1.02] active:scale-95 ${
+          className={`p-2 rounded-xl border text-xs font-semibold shadow-sm transition-all hover:scale-[1.03] active:scale-95 ${
             isDark
               ? 'bg-gradient-to-r from-cyan-600/30 to-indigo-600/30 border-cyan-500/50 text-cyan-200 hover:border-cyan-400 hover:text-white'
               : 'bg-gradient-to-r from-cyan-50 to-indigo-50 border-cyan-300 text-cyan-800 hover:border-cyan-400'
           }`}
           title={t.shareTooltip}
         >
-          <Share2 className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="hidden sm:inline">{t.share}</span>
+          <Share2 className="w-4 h-4 text-cyan-400" />
         </button>
 
-        {/* Export Dropdown */}
+        {/* Export Dropdown (Icon Only) */}
         <div className="relative">
           <button
             type="button"
@@ -291,11 +297,11 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               setShowExport((v) => !v);
               setShowTemplates(false);
             }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-colors"
+            title={t.export}
           >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t.export}</span>
-            <ChevronDown className="w-3 h-3 opacity-80" />
+            <Download className="w-4 h-4" />
+            <ChevronDown className="w-2.5 h-2.5 opacity-80" />
           </button>
 
           {showExport && (
@@ -473,11 +479,11 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
-        {/* Toggle Right Outliner */}
+        {/* Toggle Right Outliner (Icon Only) */}
         <button
           type="button"
           onClick={onToggleRightPanel}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+          className={`p-2 rounded-xl border text-xs font-semibold transition-colors ${
             isRightPanelOpen
               ? isDark
                 ? 'bg-indigo-600/25 border-indigo-500/50 text-indigo-300'
@@ -493,7 +499,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
           ) : (
             <PanelRightOpen className="w-4 h-4" />
           )}
-          <span className="hidden lg:inline">{isRightPanelOpen ? t.hideOutliner : t.openOutliner}</span>
         </button>
       </div>
     </header>
